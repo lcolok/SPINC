@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "device": {
     "reference": "U8",
     "mpn": "DS2712E+",
@@ -8,7 +8,7 @@
     "datasheet": "https://www.analog.com/media/en/technical-documentation/data-sheets/ds2711-ds2712.pdf",
     "datasheet_revision": "Rev 4/11"
   },
-  "intent": "Freeze the upstream DS2712 charger-controller pinout and critical current-sense path for JLC Rev A. These are equivalence constraints, not redesign targets.",
+  "intent": "Freeze the upstream DS2712 charger-controller pinout and its safety-critical analog support network for JLC Rev A. These are equivalence constraints, not redesign targets.",
   "pins": [
     {"pin": 1,  "name": "CC1",   "net": "Net-(Q4-G)",                    "state": "connected", "role": "cell-1 charge-control output"},
     {"pin": 2,  "name": "CC2",   "net": "unconnected-(U8-CC2-Pad2)",   "state": "nc",        "role": "cell-2 charge-control output; unused in SPINC"},
@@ -64,6 +64,44 @@
       "ds2712_typical_threshold_v": 0.125,
       "nominal_regulation_current_a": 1.0080645161,
       "calculation": "0.125 V / 0.124 ohm ~= 1.008 A"
+    },
+    "cell_test_threshold": {
+      "description": "Freeze the CTST programming branch exactly as upstream.",
+      "path": ["U8.10/CTST", "Net-(U8-CTST)", "R32.1", "R32=22k", "R32.2", "GND"],
+      "components": [
+        {"reference": "R32", "value": "22k", "lcsc": "C114065", "pad_1_net": "Net-(U8-CTST)", "pad_2_net": "GND"}
+      ]
+    },
+    "charge_timer": {
+      "description": "Freeze the TMR programming branch exactly as upstream.",
+      "path": ["U8.11/TMR", "Net-(U8-TMR)", "R33.1", "R33=100k", "R33.2", "GND"],
+      "components": [
+        {"reference": "R33", "value": "100k", "lcsc": "C14675", "pad_1_net": "Net-(U8-TMR)", "pad_2_net": "GND"}
+      ]
+    },
+    "controller_supply": {
+      "description": "DS2712 VDD is supplied from 5 V through the upstream 100 ohm isolation resistor and locally bypassed by 1 uF.",
+      "path": ["5V", "R30.1", "R30=100ohm", "R30.2", "Net-(U8-VDD)", "U8.12/VDD"],
+      "components": [
+        {"reference": "R30", "value": "100", "lcsc": "C125923", "pad_1_net": "5V", "pad_2_net": "Net-(U8-VDD)"},
+        {"reference": "C15", "value": "1uF", "lcsc": "C15849", "pad_1_net": "Net-(U8-VDD)", "pad_2_net": "GND"}
+      ]
+    },
+    "thermistor_channel_1": {
+      "description": "THM1 uses a 10 k pull-up from DS2712 VDD and a populated NTC to ground. TH3 is an optional parallel through-hole NTC footprint and must remain DNP.",
+      "path": ["Net-(U8-VDD)", "R31.2", "R31=10k", "R31.1", "Net-(U8-THM1)", "U8.13/THM1", "TH1.1", "TH1=NTC", "TH1.2", "GND"],
+      "components": [
+        {"reference": "R31", "value": "10k", "lcsc": "C98220", "pad_1_net": "Net-(U8-THM1)", "pad_2_net": "Net-(U8-VDD)"},
+        {"reference": "TH1", "value": "Thermistor_NTC", "lcsc": "C13564", "pad_1_net": "Net-(U8-THM1)", "pad_2_net": "GND"}
+      ],
+      "optional_dnp": {
+        "reference": "TH3",
+        "value": "Thermistor_NTC",
+        "pad_1_net": "Net-(U8-THM1)",
+        "pad_2_net": "GND",
+        "must_be_dnp": true,
+        "must_be_excluded_from_bom": true
+      }
     },
     "single_cell_channel_policy": {
       "active_channel": 1,
