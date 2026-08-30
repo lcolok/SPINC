@@ -123,6 +123,21 @@
       {"reference": "R35", "pin": 2, "function": "VN1 sense-filter feed"}
     ]
   },
+  "placement_freeze": {
+    "tolerance_mm": 0.001,
+    "components": {
+      "C30": {"x": 130.65, "y": -70.25, "rotation": 270.0, "layer": "top"},
+      "D2": {"x": 124.85, "y": -66.9, "rotation": 0.0, "layer": "top"},
+      "D3": {"x": 126.2075, "y": -74.25, "rotation": 270.0, "layer": "top"},
+      "D4": {"x": 119.8175, "y": -79.52, "rotation": 180.0, "layer": "top"},
+      "L1": {"x": 120.9, "y": -73.175, "rotation": 90.0, "layer": "top"},
+      "Q4": {"x": 129.848334, "y": -75.246666, "rotation": 90.0, "layer": "top"},
+      "Q5": {"x": 126.45, "y": -70.3625, "rotation": 0.0, "layer": "top"},
+      "R36": {"x": 129.948334, "y": -72.546666, "rotation": 180.0, "layer": "top"},
+      "R37": {"x": 129.15, "y": -70.25, "rotation": 270.0, "layer": "top"},
+      "U8": {"x": 135.4875, "y": -74.45, "rotation": 270.0, "layer": "top"}
+    }
+  },
   "safety_invariants": [
     "Q5, not Q4, remains the main 5 V switching PMOS.",
     "U8.CC1 must remain connected to Q4 gate and U8.CSOUT to Q4 drain.",
@@ -133,6 +148,6 @@
     "D4 remains in series between the L1 output node and the H-bridge/VP1 high rail.",
     "D3 pin 2 remains explicitly NC and its clamp orientation must not be reversed during JLC library remapping.",
     "The DS2712 current-sense return remains the separate R34/R35 low-rail path frozen in critical-charger-audit.json.",
-    "Rev A layout migration must preserve a compact high-di/dt loop around Q5, D2 and L1 and preserve Kelvin-quality R34/R35 sensing."
+    "Rev A layout migration must preserve the upstream Q5/D2/L1/D4/Q4 placement cluster and Kelvin-quality R34/R35 sensing."
   ]
 }
