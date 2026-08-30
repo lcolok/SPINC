@@ -40,7 +40,10 @@ jobs:
       - name: Self-test JLCEDA BOM/CPL round-trip verifier
         run: python JLC/verify_jlc_export.py --self-test
 
-      - name: Syntax-check JLCEDA Rev A helpers
+      - name: Syntax-check fail-closed runtime runner
+        run: bash -n JLC/run_rev_a_harness.sh
+
+      - name: Syntax-check JLCEDA Rev A fallback helpers
         run: |
           node --check JLC/jlceda-scripts/import-rev-a-kicad.js
           node --check JLC/jlceda-scripts/audit-jlc-library-bindings.js
@@ -63,6 +66,7 @@ jobs:
           name: SPINC-JLC-Rev-A-Audit-Kit-${{ github.sha }}
           path: |
             JLC/jlc-bindings.json
+            JLC/run_rev_a_harness.sh
             JLC/jlceda-scripts/import-rev-a-kicad.js
             JLC/jlceda-scripts/audit-jlc-library-bindings.js
             JLC/jlceda-scripts/export-rev-a-audit.js
