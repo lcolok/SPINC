@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "repository": "lcolok/jlc-eda-research",
+  "branch": "main",
+  "commit": "bd5e255b96356f4360f169b65e6b824644d764db",
+  "requiredCapabilities": [
+    "eda bootstrap --host auto",
+    "project import-external",
+    "activate pcb",
+    "pcb drc",
+    "bom export --verify",
+    "pcb export cpl",
+    "pcb export gerber",
+    "project export"
+  ],
+  "primaryEntryPoint": "JLC/run_rev_a_harness.sh",
+  "fallback": "JLC/jlceda-scripts/*.js",
+  "intent": "Pin the mature Web-first JLCEDA harness used for the SPINC Golden Rev A runtime migration and evidence pipeline."
+}
