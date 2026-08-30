@@ -74,6 +74,27 @@ def pad_map(block: str) -> dict[str, dict[str, str]]:
     return result
 
 
+def verify_two_terminal_component(expected: dict[str, object], label: str) -> None:
+    """Verify one audited two-terminal component's pad nets and BOM identity."""
+    ref = str(expected["reference"])
+    block = footprint_block(pcb_text, ref)
+    require(bool(block), f"{label}: {ref} footprint exists")
+    if not block:
+        return
+
+    pads = pad_map(block)
+    require(pads.get("1", {}).get("net") == expected["pad_1_net"], f"{label}: {ref}.1 net is frozen")
+    require(pads.get("2", {}).get("net") == expected["pad_2_net"], f"{label}: {ref}.2 net is frozen")
+
+    row = bom_by_ref.get(ref)
+    require(row is not None, f"{label}: {ref} exists in production BOM")
+    if row:
+        if "value" in expected:
+            require(row["Value"].strip() == str(expected["value"]), f"{label}: {ref} value is frozen to {expected['value']}")
+        if expected.get("lcsc"):
+            require(row["LCSC Part #"].strip() == str(expected["lcsc"]), f"{label}: {ref} LCSC identity is frozen to {expected['lcsc']}")
+
+
 manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 charger = json.loads(CHARGER_AUDIT.read_text(encoding="utf-8"))
 pcb_text = PCB.read_text(encoding="utf-8")
@@ -117,8 +138,14 @@ expected_parts = {
     "U7": ("VCNL4040M3OE", "C142526"),
     "U8": ("DS2712E+", "C7455651"),
     "L1": ("SRP7050TA-470M", "C2047110"),
+    "R30": ("100", "C125923"),
+    "R31": ("10k", "C98220"),
+    "R32": ("22k", "C114065"),
+    "R33": ("100k", "C14675"),
     "R34": ("0R124", "C875831"),
     "R35": ("10", "C109318"),
+    "C15": ("1uF", "C15849"),
+    "TH1": ("Thermistor_NTC", "C13564"),
     "J4": ("Conn_01x01_Pin", "C3029553"),
     "J5": ("Conn_01x01_Pin", "C3029553"),
 }
@@ -165,6 +192,30 @@ for key in ("sense_resistor", "sense_filter_resistor"):
 require(abs(float(current_sense["ds2712_typical_threshold_v"]) / float(current_sense["sense_resistor"]["value_ohm"]) - float(current_sense["nominal_regulation_current_a"])) < 1e-6, "documented nominal DS2712 regulation-current calculation is self-consistent")
 require(u8_pads.get("7", {}).get("net") == current_sense["sense_filter_resistor"]["pad_1_net"], "U8.VN1 enters R35 sense-filter net")
 require(u8_pads.get("8", {}).get("net") == "GND", "U8.VN0 remains at GND")
+
+# ---- DS2712 analog programming / safety networks -------------------------
+branch_pin_expectations = {
+    "cell_test_threshold": ("10", "Net-(U8-CTST)"),
+    "charge_timer": ("11", "Net-(U8-TMR)"),
+    "controller_supply": ("12", "Net-(U8-VDD)"),
+    "thermistor_channel_1": ("13", "Net-(U8-THM1)"),
+}
+for branch_name, (pin, net) in branch_pin_expectations.items():
+    require(u8_pads.get(pin, {}).get("net") == net, f"{branch_name}: U8 pin {pin} remains on {net}")
+    branch = charger["critical_paths"][branch_name]
+    for component in branch.get("components", []):
+        verify_two_terminal_component(component, branch_name)
+
+thermistor = charger["critical_paths"]["thermistor_channel_1"]
+th3_expected = thermistor["optional_dnp"]
+th3_block = footprint_block(pcb_text, str(th3_expected["reference"]))
+require(bool(th3_block), "thermistor_channel_1: TH3 optional DNP footprint exists")
+if th3_block:
+    th3_pads = pad_map(th3_block)
+    require(th3_pads.get("1", {}).get("net") == th3_expected["pad_1_net"], "thermistor_channel_1: TH3.1 stays on THM1 net")
+    require(th3_pads.get("2", {}).get("net") == th3_expected["pad_2_net"], "thermistor_channel_1: TH3.2 stays on GND")
+require(bool(th3_expected["must_be_dnp"]), "thermistor_channel_1 audit requires TH3 DNP")
+require(bool(th3_expected["must_be_excluded_from_bom"]), "thermistor_channel_1 audit requires TH3 BOM exclusion")
 
 # ---- Pick-and-place / mechanical placement freeze ------------------------
 pos_by_ref = {row["Designator"].strip(): row for row in pos_rows}
