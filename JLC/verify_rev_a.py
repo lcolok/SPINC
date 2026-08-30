@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "JLC" / "rev-a-baseline.json"
 CHARGER_AUDIT = ROOT / "JLC" / "critical-charger-audit.json"
+POLARITY_AUDIT = ROOT / "JLC" / "critical-polarity-audit.json"
 PCB = ROOT / "PCB" / "SPINC AA Charger" / "SPINC AA Charger.kicad_pcb"
 SCH = ROOT / "PCB" / "SPINC AA Charger" / "SPINC AA Charger.kicad_sch"
 BOM = ROOT / "PCB" / "SPINC AA Charger" / "production" / "bom.csv"
@@ -95,8 +96,29 @@ def verify_two_terminal_component(expected: dict[str, object], label: str) -> No
             require(row["LCSC Part #"].strip() == str(expected["lcsc"]), f"{label}: {ref} LCSC identity is frozen to {expected['lcsc']}")
 
 
+def verify_device_pads(ref: str, expected_pads: list[dict[str, object]], label: str) -> dict[str, dict[str, str]]:
+    """Verify a multi-pin device's pad function/net mapping and return actual pads."""
+    block = footprint_block(pcb_text, ref)
+    require(bool(block), f"{label}: {ref} footprint exists")
+    if not block:
+        return {}
+
+    pads = pad_map(block)
+    for expected in expected_pads:
+        pin = str(expected.get("pin", expected.get("pad")))
+        actual = pads.get(pin)
+        require(actual is not None, f"{label}: {ref} pin {pin} exists")
+        if not actual:
+            continue
+        if expected.get("function") is not None:
+            require(actual["function"] == str(expected["function"]), f"{label}: {ref}.{pin} function remains {expected['function']}")
+        require(actual["net"] == str(expected["net"]), f"{label}: {ref}.{pin} net remains {expected['net']}")
+    return pads
+
+
 manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
 charger = json.loads(CHARGER_AUDIT.read_text(encoding="utf-8"))
+polarity = json.loads(POLARITY_AUDIT.read_text(encoding="utf-8"))
 pcb_text = PCB.read_text(encoding="utf-8")
 sch_text = SCH.read_text(encoding="utf-8")
 bom_rows = read_csv(BOM)
@@ -137,7 +159,12 @@ expected_parts = {
     "U5": ("RP2040", "C2040"),
     "U7": ("VCNL4040M3OE", "C142526"),
     "U8": ("DS2712E+", "C7455651"),
+    "Q1": ("DMG2301L", "C102619"),
+    "Q2": ("DMHC3025LSD", "C156387"),
+    "Q3": ("DMG2301L", "C102619"),
     "L1": ("SRP7050TA-470M", "C2047110"),
+    "R18": ("4k7", "C99782"),
+    "R23": ("4k7", "C99782"),
     "R30": ("100", "C125923"),
     "R31": ("10k", "C98220"),
     "R32": ("22k", "C114065"),
@@ -216,6 +243,35 @@ if th3_block:
     require(th3_pads.get("2", {}).get("net") == th3_expected["pad_2_net"], "thermistor_channel_1: TH3.2 stays on GND")
 require(bool(th3_expected["must_be_dnp"]), "thermistor_channel_1 audit requires TH3 DNP")
 require(bool(th3_expected["must_be_excluded_from_bom"]), "thermistor_channel_1 audit requires TH3 BOM exclusion")
+
+# ---- Battery-polarity correction H-bridge -------------------------------
+bridge = polarity["bridge"]
+require(bridge["reference"] == "Q2", "polarity audit bridge reference is Q2")
+require(bridge["mpn"] == "DMHC3025LSD", "polarity audit bridge MPN is DMHC3025LSD")
+require(bridge["lcsc"] == "C156387", "polarity audit bridge LCSC identity is C156387")
+q2_pads = verify_device_pads("Q2", bridge["pads"], "polarity bridge")
+require(len(q2_pads) == 8, "polarity bridge: Q2 has exactly 8 pads")
+
+for driver in polarity["high_side_gate_drivers"]:
+    ref = str(driver["reference"])
+    require(driver["mpn"] == "DMG2301L", f"polarity high-side driver {ref} remains DMG2301L")
+    require(driver["lcsc"] == "C102619", f"polarity high-side driver {ref} remains C102619")
+    verify_device_pads(ref, driver["pads"], "polarity high-side gate driver")
+    verify_two_terminal_component(driver["pull_down"], "polarity high-side gate bias")
+
+rp_control = polarity["rp2040_control"]
+require(rp_control["reference"] == "U5", "polarity control source remains U5/RP2040")
+u5_pads = verify_device_pads("U5", rp_control["pins"], "polarity RP2040 control")
+reserved = rp_control["reserved_gap"]
+reserved_pin = str(reserved["pad"])
+require(u5_pads.get(reserved_pin, {}).get("function") == reserved["function"], f"polarity RP2040 reserved pad {reserved_pin} remains {reserved['function']}")
+require(u5_pads.get(reserved_pin, {}).get("net", "").startswith("unconnected-(U5-"), f"polarity RP2040 reserved pad {reserved_pin} stays unconnected")
+
+# Cross-audit the bridge rails against the already-frozen charger core.
+require(q2_pads.get("3", {}).get("net") == current_sense["sense_resistor"]["pad_1_net"], "polarity bridge low rail equals DS2712 current-sense node")
+require(q2_pads.get("7", {}).get("net") == u8_pads.get("15", {}).get("net"), "polarity bridge high rail equals DS2712 VP1 sense rail")
+require(q2_pads.get("2", {}).get("net") == "BAT_A", "polarity bridge A midpoint remains BAT_A")
+require(q2_pads.get("6", {}).get("net") == "BAT_B", "polarity bridge B midpoint remains BAT_B")
 
 # ---- Pick-and-place / mechanical placement freeze ------------------------
 pos_by_ref = {row["Designator"].strip(): row for row in pos_rows}
