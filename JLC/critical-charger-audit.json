@@ -48,7 +48,8 @@
         "value_ohm": 0.124,
         "package": "2512",
         "lcsc": "C875831",
-        "pad_1_net": "Net-(Q2-N1S/N2S)",
+        "pad_1_net": "Net-(Q2-N1S{slash}N2S)",
+        "pad_1_net_display": "Net-(Q2-N1S/N2S)",
         "pad_2_net": "GND"
       },
       "sense_filter_resistor": {
@@ -57,7 +58,8 @@
         "package": "0603",
         "lcsc": "C109318",
         "pad_1_net": "Net-(U8-VN1)",
-        "pad_2_net": "Net-(Q2-N1S/N2S)"
+        "pad_2_net": "Net-(Q2-N1S{slash}N2S)",
+        "pad_2_net_display": "Net-(Q2-N1S/N2S)"
       },
       "ds2712_typical_threshold_v": 0.125,
       "nominal_regulation_current_a": 1.0080645161,
