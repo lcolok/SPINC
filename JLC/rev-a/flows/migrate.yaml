@@ -46,14 +46,6 @@ stages:
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
-  - id: prepare-evidence-dir
-    title: "Prepare runtime evidence directory"
-    action: "mkdir -p JLC/out/runtime"
-    gate:
-      exit_code: 0
-    evidence: [exit_code, stdout, stderr]
-    on_fail: stop
-
   - id: bootstrap-runtime
     title: "Connect to the existing JLCEDA runtime"
     action: "jlc eda bootstrap --host auto"
@@ -92,10 +84,10 @@ stages:
 
   - id: export-bom
     title: "Export migrated BOM and verify JLC device identity drift"
-    action: "jlc bom export -o JLC/out/runtime/SPINC-JLC-Rev-A-BOM.csv --format csv --verify"
+    action: "jlc bom export -o JLC/out/SPINC-JLC-Rev-A-BOM.csv --format csv --verify"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/runtime/SPINC-JLC-Rev-A-BOM.csv"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A-BOM.csv"
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
@@ -109,28 +101,28 @@ stages:
 
   - id: export-cpl
     title: "Export native JLCEDA Pick-and-Place/CPL"
-    action: "jlc pcb export cpl -o JLC/out/runtime/SPINC-JLC-Rev-A-CPL.csv"
+    action: "jlc pcb export cpl -o JLC/out/SPINC-JLC-Rev-A-CPL.csv"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/runtime/SPINC-JLC-Rev-A-CPL.csv"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A-CPL.csv"
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
   - id: export-gerber
     title: "Export JLCEDA Gerber fabrication evidence"
-    action: "jlc pcb export gerber -o JLC/out/runtime/SPINC-JLC-Rev-A-Gerber.zip"
+    action: "jlc pcb export gerber -o JLC/out/SPINC-JLC-Rev-A-Gerber.zip"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/runtime/SPINC-JLC-Rev-A-Gerber.zip"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A-Gerber.zip"
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
   - id: export-epro2
     title: "Export migrated JLCEDA project container"
-    action: "jlc project export -o JLC/out/runtime/SPINC-JLC-Rev-A.epro2"
+    action: "jlc project export -o JLC/out/SPINC-JLC-Rev-A.epro2"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/runtime/SPINC-JLC-Rev-A.epro2"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A.epro2"
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
@@ -138,11 +130,11 @@ stages:
     title: "Round-trip migrated BOM/CPL against Golden KiCad production data"
     action: >-
       python3 JLC/verify_jlc_export.py
-      --bom JLC/out/runtime/SPINC-JLC-Rev-A-BOM.csv
-      --cpl JLC/out/runtime/SPINC-JLC-Rev-A-CPL.csv
-      --report JLC/out/runtime/SPINC-JLC-Rev-A-roundtrip.json
+      --bom JLC/out/SPINC-JLC-Rev-A-BOM.csv
+      --cpl JLC/out/SPINC-JLC-Rev-A-CPL.csv
+      --report JLC/out/SPINC-JLC-Rev-A-roundtrip.json
     gate:
       exit_code: 0
-      file_exists: "JLC/out/runtime/SPINC-JLC-Rev-A-roundtrip.json"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A-roundtrip.json"
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
