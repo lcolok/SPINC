@@ -34,7 +34,15 @@ The selected JLC stackup is intentionally close to the upstream board's recorded
 
 For Rev A, preserve upstream electrical identities wherever possible.
 
-The original production BOM already contains LCSC part numbers for nearly all populated components. The previously-unbound charger controller is now explicitly bound as:
+The production BOM is the source of truth for populated components. `build_jlc_binding_manifest.py` regenerates `jlc-bindings.json` from that BOM and CI refuses a stale manifest.
+
+Current frozen population:
+
+- **91 populated designators**
+- **44 unique LCSC/JLC C-numbers**
+- `TH3` remains explicitly **DNP** and is never allowed into the populated-device manifest
+
+The previously-unbound charger controller is explicitly bound as:
 
 - `U8 = DS2712E+`
 - Package: 16-pin TSSOP
@@ -83,23 +91,41 @@ Particularly sensitive references include:
 - `TH1/TH2`: populated thermistors
 - `TH3`: intentionally **DNP**; retain footprint/reference behavior but do not populate
 
-## Verification
+## Repository verification
 
-Run both guardrails:
+Run the complete static/golden-source guardrails:
 
 ```bash
 python JLC/verify_rev_a.py
 python JLC/verify_power_stage.py
+python JLC/build_jlc_binding_manifest.py --check
+python JLC/verify_jlc_export.py --self-test
+node --check JLC/jlceda-scripts/import-rev-a-kicad.js
+node --check JLC/jlceda-scripts/audit-jlc-library-bindings.js
+node --check JLC/jlceda-scripts/export-rev-a-audit.js
 ```
 
-`build_migration_bundle.py` runs both again before it is allowed to emit a JLCEDA migration ZIP. The same two verifiers run automatically in GitHub Actions when Rev A PCB/JLC files change.
+`build_migration_bundle.py` reruns the electrical/mechanical reproduction guardrails before it is allowed to emit a JLCEDA migration ZIP.
 
-The first full power-stage-enabled CI run (`b33a3abe13881a8a463c85014bb780c9e22dbc1e`) passed:
+The first full power-stage-enabled audit established:
 
 - base reproduction audit: **492 checks passed, 0 failed**
 - charger power-stage audit: **164 checks passed, 0 failed**
-- total explicit equivalence checks: **656**
-- deterministic migration ZIP: generated and published successfully
+- total explicit electrical/mechanical equivalence checks: **656**
+
+The CI run for commit `48495bade76f0b89e5447dce77934a83932506ef` additionally passed:
+
+- generated JLC binding-manifest freshness check
+- BOM/CPL round-trip verifier self-test
+- syntax validation of all three standalone JLCEDA helpers
+- deterministic migration bundle build
+- migration artifact publication
+- JLCEDA audit-kit artifact publication
+
+That run publishes two artifacts:
+
+1. `SPINC-JLC-Rev-A-KiCad-<sha>` — protected KiCad migration ZIP
+2. `SPINC-JLC-Rev-A-Audit-Kit-<sha>` — binding manifest plus the three JLCEDA standalone audit/import helpers
 
 The guardrails currently cover:
 
@@ -119,23 +145,96 @@ The guardrails currently cover:
 14. no accidental bottom-side assembly components
 15. preservation of `TH3` as DNP / excluded from BOM
 16. pinned upstream golden commit and JLC stackup
+17. generated 91-designator / 44-C-number JLC binding manifest
+18. BOM/CPL round-trip comparison including C-number, side, rotation and relative-placement drift
 
-## JLCEDA migration procedure
+## JLCEDA three-stage migration pipeline
 
-Rev A migration is not considered complete merely because JLCEDA can open the design.
+**Important:** repository CI being green proves the source-side guardrails and helper syntax. It does **not** prove that a particular JLCEDA runtime has imported the board correctly. A migration only becomes accepted after the JLCEDA-side stages below produce and pass their evidence.
 
-1. Import/migrate the upstream KiCad 8 schematic and PCB into JLCEDA Pro using the CI-generated `SPINC-JLC-Rev-A-KiCad` bundle.
-2. Preserve the KiCad source files unchanged as the upstream reference.
-3. Re-bind every populated symbol/footprint to the intended JLC/LCSC component identity.
-4. Verify all nets pin-by-pin against the upstream schematic.
-5. Verify exact board outline, internal cutouts, connectors, battery contacts, sensor locations and rotations.
-6. Rebuild/inspect copper pours rather than assuming imported zones are identical.
-7. Apply `JLC04161H-3313` as the manufacturing stackup and re-check USB routing/return path.
-8. Treat the charger cluster as frozen: Q5 is the main switching PMOS, Q4 is the DS2712 gate/control PMOS; do not swap their conceptual roles while remapping library components.
-9. Inspect Q5/D2/L1/D4 high-di/dt routing, D3 orientation and the R34/R35 Kelvin-quality current-sense return manually.
-10. Inspect the H-bridge orientation and verify `BAT_A/BAT_B` remain the two bridge midpoints regardless of inserted-cell polarity.
-11. Run JLCEDA ERC/DRC and JLCPCB DFM checks.
-12. Export JLC production BOM/CPL and compare them to the frozen Rev A baseline before ordering.
+### Stage 1 — guarded KiCad import
+
+Run in JLCEDA Pro V3 via `Advanced -> Run Script`:
+
+`JLC/jlceda-scripts/import-rev-a-kicad.js`
+
+Select only the CI-produced `SPINC-JLC-Rev-A-KiCad-<sha>.zip`.
+
+The helper:
+
+- refuses an unexpected ZIP name or implausibly small file
+- imports the KiCad documents using source schematic style
+- keeps symbol/footprint/3D associations during migration
+- deliberately does **not** extract the KiCad libraries into the user's JLC library
+- does **not** call the imported result production-ready
+
+After import, preserve the original KiCad files unchanged as the upstream reference.
+
+### Stage 2 — read-only JLC system-library audit
+
+Before replacing or rebinding any component, run:
+
+`JLC/jlceda-scripts/audit-jlc-library-bindings.js`
+
+When prompted, select `JLC/jlc-bindings.json` from the matching Audit Kit/commit.
+
+This helper is intentionally **read only**. It performs exact JLC system-library queries for all 44 frozen C-numbers and exports `SPINC-JLC-Rev-A-Library-Audit.json` containing:
+
+- zero / one / multiple match classification for every C-number
+- JLC device UUID and library UUID
+- associated JLC symbol name/UUID
+- associated JLC footprint name/UUID
+- associated JLC 3D model when present
+- original KiCad value/footprint and all affected designators
+- the currently imported PCB footprint for each designator when a PCB document is available
+
+Even a perfect 44/44 unique match **does not authorize automatic footprint replacement**. Package/pad/pin compatibility must be reviewed before mutation because the JLC library APIs are currently BETA and a matching C-number alone does not prove that replacing an imported footprint is geometrically harmless.
+
+### Stage 3 — JLC production-evidence export
+
+After library review/rebinding and PCB inspection, run:
+
+`JLC/jlceda-scripts/export-rev-a-audit.js`
+
+The helper runs PCB DRC and exports:
+
+- `SPINC-JLC-Rev-A.epro2`
+- `SPINC-JLC-Rev-A-BOM.csv`
+- `SPINC-JLC-Rev-A-CPL.csv`
+- JLCEDA netlist
+- `SPINC-JLC-Rev-A-Gerber.zip`
+- JLCEDA PCB information file
+
+The BOM exporter explicitly includes `Supplier Part` under the stable column name `LCSC Part #`; it does not depend on the user's default BOM template.
+
+Run the exported BOM/CPL through:
+
+```bash
+python JLC/verify_jlc_export.py \
+  --bom SPINC-JLC-Rev-A-BOM.csv \
+  --cpl SPINC-JLC-Rev-A-CPL.csv
+```
+
+The round-trip verifier permits a single harmless global coordinate-origin translation (and reports a detected coordinate-frame Y inversion), but rejects per-component placement drift, assembly-side changes, rotation changes, missing/extra BOM references, DNP leakage and C-number changes.
+
+BOM/CPL cannot prove board-outline/cutout/copper-pour equivalence, which is why Stage 3 also exports Gerber and PCB information. Those must be inspected/diffed before ordering.
+
+## Remaining JLCEDA acceptance work
+
+A JLCEDA import is not accepted merely because it opens without an error dialog. Before first-board order:
+
+1. run the three stages above in the actual target JLCEDA runtime
+2. review every library-audit exception and footprint association
+3. verify all nets pin-by-pin against the upstream schematic
+4. verify exact board outline, internal cutouts, connectors, battery contacts, sensor locations and rotations
+5. rebuild/inspect copper pours rather than assuming imported zones are identical
+6. apply `JLC04161H-3313` and re-check USB routing/return path
+7. keep Q5 as the main switching PMOS and Q4 as the DS2712 gate/control PMOS
+8. inspect Q5/D2/L1/D4 high-di/dt routing, D3 orientation and R34/R35 Kelvin-quality current sensing manually
+9. inspect H-bridge orientation and verify `BAT_A/BAT_B` remain the two bridge midpoints regardless of inserted-cell polarity
+10. pass JLCEDA ERC/DRC and JLCPCB DFM review
+11. pass BOM/CPL round-trip verification
+12. diff Gerber board outline/internal cutout and copper-layer evidence against the golden source before ordering
 
 ## Golden-board gates
 
