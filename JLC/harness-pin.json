@@ -2,8 +2,11 @@
   "schema": 1,
   "repository": "lcolok/jlc-eda-research",
   "branch": "main",
-  "commit": "bd5e255b96356f4360f169b65e6b824644d764db",
+  "commit": "3d5a155461c11791dc907c23eb8b69bc036e13f2",
   "requiredCapabilities": [
+    "flow validate",
+    "flow run --from",
+    "flow status",
     "eda bootstrap --host auto",
     "project import-external",
     "activate pcb",
@@ -13,7 +16,10 @@
     "pcb export gerber",
     "project export"
   ],
-  "primaryEntryPoint": "JLC/run_rev_a_harness.sh",
+  "primaryEntryPoint": "jlc flow run --board JLC/rev-a --flow migrate",
+  "validationEntryPoint": "jlc flow validate --board JLC/rev-a --flow migrate",
+  "recoveryEntryPoint": "jlc flow run --board JLC/rev-a --flow migrate --from <stage-id>",
+  "flowSpec": "JLC/rev-a/flows/migrate.yaml",
   "fallback": "JLC/jlceda-scripts/*.js",
-  "intent": "Pin the mature Web-first JLCEDA harness used for the SPINC Golden Rev A runtime migration and evidence pipeline."
+  "intent": "Pin the shared Go Flow Harness used for the SPINC Golden Rev A runtime migration and evidence pipeline; SPINC carries declarative flow data, not shell orchestration."
 }
