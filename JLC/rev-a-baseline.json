@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "name": "SPINC JLC Rev A reproduction baseline",
+  "intent": "Reproduce the upstream SPINC AA charger first. No feature redesign is allowed before the golden Rev A board passes hardware validation.",
+  "upstream": {
+    "repository": "CoretechR/SPINC",
+    "commit": "af7b36e8ca5e99bfb3e99d8b02d9864117091de7",
+    "pcb": "PCB/SPINC AA Charger/SPINC AA Charger.kicad_pcb",
+    "schematic": "PCB/SPINC AA Charger/SPINC AA Charger.kicad_sch",
+    "production_bom": "PCB/SPINC AA Charger/production/bom.csv",
+    "production_positions": "PCB/SPINC AA Charger/production/positions.csv"
+  },
+  "manufacturing_profile": {
+    "eda_ssot": "JLCEDA Pro",
+    "pcb_vendor": "JLCPCB",
+    "assembly_vendor": "JLCPCB",
+    "layers": 4,
+    "source_board_thickness_mm": 1.565,
+    "order_board_thickness_mm": 1.6,
+    "stackup": "JLC04161H-3313",
+    "outer_copper_um": 35,
+    "inner_copper_um": 15.2,
+    "surface_finish": "ENIG",
+    "solder_mask": "black",
+    "silkscreen": "white",
+    "assembly_side": "top",
+    "assembly_tier": "standard"
+  },
+  "mechanical_freeze": {
+    "edge_cuts_exact": true,
+    "source_outer_bounding_box_mm": {
+      "x_min": 115.0,
+      "x_max": 185.0,
+      "y_min": 64.000008,
+      "y_max": 136.000008
+    },
+    "nominal_outer_bbox_size_mm": {
+      "width": 70.0,
+      "height": 72.0
+    },
+    "critical_placements": {
+      "J1":  {"x": 150.0,    "y": -66.94,  "rotation": 180.0, "layer": "top", "role": "USB-C"},
+      "J2":  {"x": 168.415,  "y": -131.5,  "rotation": 90.0,  "layer": "top", "role": "servo/header"},
+      "J3":  {"x": 150.0,    "y": -128.78, "rotation": 0.0,   "layer": "top", "role": "display connector"},
+      "J4":  {"x": 120.4,    "y": -90.0,   "rotation": 90.0,  "layer": "top", "role": "battery contact A"},
+      "J5":  {"x": 179.6,    "y": -90.0,   "rotation": 270.0, "layer": "top", "role": "battery contact B"},
+      "SW1": {"x": 167.5,    "y": -66.25,  "rotation": 0.0,   "layer": "top", "role": "button"},
+      "SW2": {"x": 165.45,   "y": -78.65,  "rotation": 0.0,   "layer": "top", "role": "button"},
+      "SW3": {"x": 132.5,    "y": -66.25,  "rotation": 0.0,   "layer": "top", "role": "button"},
+      "U7":  {"x": 150.0,    "y": -79.2,   "rotation": 90.0,  "layer": "top", "role": "VCNL4040 cell detector"},
+      "U8":  {"x": 135.4875, "y": -74.45,  "rotation": 270.0, "layer": "top", "role": "DS2712 charger controller"},
+      "L1":  {"x": 120.9,    "y": -73.175, "rotation": 90.0,  "layer": "top", "role": "charger power inductor"},
+      "R34": {"x": 120.0,    "y": -124.2,  "rotation": 90.0,  "layer": "top", "role": "0.124 ohm current sense"},
+      "TH1": {"x": 144.6,    "y": -79.7,   "rotation": 0.0,   "layer": "top", "role": "battery thermistor"},
+      "TH2": {"x": 182.325,  "y": -89.3,   "rotation": 0.0,   "layer": "top", "role": "thermistor"},
+      "TH3": {"x": 134.8,    "y": -79.55,  "rotation": 180.0, "layer": "top", "role": "mechanical/thermal reference"}
+    }
+  },
+  "critical_parts": {
+    "U5": {"mpn": "RP2040", "lcsc": "C2040"},
+    "U8": {"mpn": "DS2712E+", "lcsc": "C7455651", "sourcing": "global-sourcing-or-consign-if-public-stock-unavailable"},
+    "L1": {"mpn": "SRP7050TA-470M", "lcsc": "C2047110", "policy": "keep upstream part for Rev A"},
+    "R34": {"value": "0R124", "package": "2512", "lcsc": "C875831"},
+    "J4_J5": {"mpn": "Keystone 590", "lcsc": "C3029553"}
+  },
+  "rev_a_change_policy": {
+    "allowed": [
+      "EDA-format migration",
+      "JLC/LCSC identity binding",
+      "manufacturing-rule adaptation required by JLCPCB",
+      "documented footprint correction only when proven electrically and mechanically equivalent",
+      "routing changes only when required to preserve electrical equivalence under the selected JLC stackup"
+    ],
+    "forbidden_until_golden_board": [
+      "chemistry expansion",
+      "charger-topology redesign",
+      "MCU replacement",
+      "mechanical layout optimization",
+      "charge-current increase",
+      "USB-PD redesign",
+      "cost-driven functional substitutions"
+    ]
+  }
+}
