@@ -1,0 +1,587 @@
+{
+  "schema": 1,
+  "intent": "Golden JLC Rev A populated-device binding manifest generated from the frozen KiCad production BOM.",
+  "source": "PCB/SPINC AA Charger/production/bom.csv",
+  "dnpReferences": [
+    "TH3"
+  ],
+  "componentCount": 91,
+  "uniqueLcscCount": 44,
+  "bindings": [
+    {
+      "lcsc": "C1591",
+      "references": [
+        "C10",
+        "C13",
+        "C14",
+        "C16",
+        "C18",
+        "C19",
+        "C21",
+        "C22",
+        "C24",
+        "C26",
+        "C27",
+        "C28"
+      ],
+      "sourceValues": [
+        "100nF"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C1705",
+      "references": [
+        "C1",
+        "C3"
+      ],
+      "sourceValues": [
+        "4.7uF"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C2040",
+      "references": [
+        "U5"
+      ],
+      "sourceValues": [
+        "RP2040"
+      ],
+      "sourceFootprints": [
+        "QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm"
+      ]
+    },
+    {
+      "lcsc": "C13564",
+      "references": [
+        "TH1",
+        "TH2"
+      ],
+      "sourceValues": [
+        "Thermistor_NTC"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C14675",
+      "references": [
+        "R5",
+        "R33"
+      ],
+      "sourceValues": [
+        "100k"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C15849",
+      "references": [
+        "C2",
+        "C4",
+        "C6",
+        "C8",
+        "C9",
+        "C15",
+        "C17",
+        "C20",
+        "C29"
+      ],
+      "sourceValues": [
+        "1uF"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C15850",
+      "references": [
+        "C30"
+      ],
+      "sourceValues": [
+        "10uF"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C22548",
+      "references": [
+        "R2"
+      ],
+      "sourceValues": [
+        "1k"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C26178",
+      "references": [
+        "D2",
+        "D4"
+      ],
+      "sourceValues": [
+        "MBRA340"
+      ],
+      "sourceFootprints": [
+        "D_SMA"
+      ]
+    },
+    {
+      "lcsc": "C37577",
+      "references": [
+        "Q5"
+      ],
+      "sourceValues": [
+        "SI2305CDS"
+      ],
+      "sourceFootprints": [
+        "SOT-23"
+      ]
+    },
+    {
+      "lcsc": "C51118",
+      "references": [
+        "U4"
+      ],
+      "sourceValues": [
+        "AP2112K-3.3"
+      ],
+      "sourceFootprints": [
+        "SOT-23-5"
+      ]
+    },
+    {
+      "lcsc": "C98220",
+      "references": [
+        "R9",
+        "R15",
+        "R16",
+        "R19",
+        "R24",
+        "R25",
+        "R26",
+        "R27",
+        "R31",
+        "R36"
+      ],
+      "sourceValues": [
+        "10k"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C99782",
+      "references": [
+        "R18",
+        "R23"
+      ],
+      "sourceValues": [
+        "4k7"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C102619",
+      "references": [
+        "Q1",
+        "Q3",
+        "Q4"
+      ],
+      "sourceValues": [
+        "DMG2301L"
+      ],
+      "sourceFootprints": [
+        "SOT-23"
+      ]
+    },
+    {
+      "lcsc": "C105579",
+      "references": [
+        "R21",
+        "R22",
+        "R28",
+        "R29"
+      ],
+      "sourceValues": [
+        "47k"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C105580",
+      "references": [
+        "R3",
+        "R4"
+      ],
+      "sourceValues": [
+        "5.1k"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C105881",
+      "references": [
+        "R37"
+      ],
+      "sourceValues": [
+        "330"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C107037",
+      "references": [
+        "C11",
+        "C12"
+      ],
+      "sourceValues": [
+        "15pF"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C109318",
+      "references": [
+        "R35"
+      ],
+      "sourceValues": [
+        "10"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C114065",
+      "references": [
+        "R32"
+      ],
+      "sourceValues": [
+        "22k"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C114662",
+      "references": [
+        "R10",
+        "R14"
+      ],
+      "sourceValues": [
+        "2k2"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C116699",
+      "references": [
+        "R20"
+      ],
+      "sourceValues": [
+        "0"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C125923",
+      "references": [
+        "R30"
+      ],
+      "sourceValues": [
+        "100"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C129351",
+      "references": [
+        "U1"
+      ],
+      "sourceValues": [
+        "LM27761"
+      ],
+      "sourceFootprints": [
+        "WSON-8-1EP_2x2mm_P0.5mm_EP0.9x1.6mm"
+      ]
+    },
+    {
+      "lcsc": "C137753",
+      "references": [
+        "R7",
+        "R8"
+      ],
+      "sourceValues": [
+        "27"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C142526",
+      "references": [
+        "U7"
+      ],
+      "sourceValues": [
+        "VCNL4040M3OE"
+      ],
+      "sourceFootprints": [
+        "VISHAY_VCNL4040_4X2X1.1"
+      ]
+    },
+    {
+      "lcsc": "C151162",
+      "references": [
+        "F1"
+      ],
+      "sourceValues": [
+        "1A"
+      ],
+      "sourceFootprints": [
+        "1206"
+      ]
+    },
+    {
+      "lcsc": "C156387",
+      "references": [
+        "Q2"
+      ],
+      "sourceValues": [
+        "DMHC3025LSD"
+      ],
+      "sourceFootprints": [
+        "SO-8_3.9x4.9mm_P1.27mm"
+      ]
+    },
+    {
+      "lcsc": "C245983",
+      "references": [
+        "R6"
+      ],
+      "sourceValues": [
+        "57.6k"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C388642",
+      "references": [
+        "SW1",
+        "SW3"
+      ],
+      "sourceValues": [
+        "SW_Push"
+      ],
+      "sourceFootprints": [
+        "Panasonic_EVQPUM_EVQPUD"
+      ]
+    },
+    {
+      "lcsc": "C875831",
+      "references": [
+        "R34"
+      ],
+      "sourceValues": [
+        "0R124"
+      ],
+      "sourceFootprints": [
+        "2512"
+      ]
+    },
+    {
+      "lcsc": "C913904",
+      "references": [
+        "C5",
+        "C7",
+        "C25"
+      ],
+      "sourceValues": [
+        "2.2uF"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C965807",
+      "references": [
+        "D1",
+        "D5"
+      ],
+      "sourceValues": [
+        "LED"
+      ],
+      "sourceFootprints": [
+        "0603"
+      ]
+    },
+    {
+      "lcsc": "C2047110",
+      "references": [
+        "L1"
+      ],
+      "sourceValues": [
+        "SRP7050TA-470M"
+      ],
+      "sourceFootprints": [
+        "L_Bourns_SRP7050TA_7.3x6.6mm"
+      ]
+    },
+    {
+      "lcsc": "C2827693",
+      "references": [
+        "U2"
+      ],
+      "sourceValues": [
+        "USBLC6-2P6"
+      ],
+      "sourceFootprints": [
+        "SOT-666"
+      ]
+    },
+    {
+      "lcsc": "C2915174",
+      "references": [
+        "SW2"
+      ],
+      "sourceValues": [
+        "SW_Push"
+      ],
+      "sourceFootprints": [
+        "SW_SPST_EVQP2"
+      ]
+    },
+    {
+      "lcsc": "C2919540",
+      "references": [
+        "J3"
+      ],
+      "sourceValues": [
+        "Conn_01x10_Socket"
+      ],
+      "sourceFootprints": [
+        "68711014022"
+      ]
+    },
+    {
+      "lcsc": "C2928912",
+      "references": [
+        "D3"
+      ],
+      "sourceValues": [
+        "MMBD4148"
+      ],
+      "sourceFootprints": [
+        "TSOT-23"
+      ]
+    },
+    {
+      "lcsc": "C2940197",
+      "references": [
+        "U3"
+      ],
+      "sourceValues": [
+        "W25Q64JVZPIQ"
+      ],
+      "sourceFootprints": [
+        "WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm"
+      ]
+    },
+    {
+      "lcsc": "C2982555",
+      "references": [
+        "J1"
+      ],
+      "sourceValues": [
+        "USB_C_Receptacle_USB2.0"
+      ],
+      "sourceFootprints": [
+        "USB_C_Receptacle_HRO_TYPE-C-31-M-12"
+      ]
+    },
+    {
+      "lcsc": "C3029553",
+      "references": [
+        "J4",
+        "J5"
+      ],
+      "sourceValues": [
+        "Conn_01x01_Pin"
+      ],
+      "sourceFootprints": [
+        "BatteryHolder_Keystone_590"
+      ]
+    },
+    {
+      "lcsc": "C6332196",
+      "references": [
+        "J2"
+      ],
+      "sourceValues": [
+        "Conn_01x03_Pin"
+      ],
+      "sourceFootprints": [
+        "PinHeader_1x03_P2.54mm_Vertical"
+      ]
+    },
+    {
+      "lcsc": "C7455651",
+      "references": [
+        "U8"
+      ],
+      "sourceValues": [
+        "DS2712E+"
+      ],
+      "sourceFootprints": [
+        "TSSOP-16_4.4x5mm_P0.65mm"
+      ]
+    },
+    {
+      "lcsc": "C20625731",
+      "references": [
+        "Y1"
+      ],
+      "sourceValues": [
+        "ABM8-272-T3"
+      ],
+      "sourceFootprints": [
+        "Crystal_SMD_Abracon_ABM8G-4Pin_3.2x2.5mm"
+      ]
+    }
+  ]
+}
