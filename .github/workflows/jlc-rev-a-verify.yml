@@ -34,12 +34,16 @@ jobs:
           python JLC/verify_rev_a.py
           python JLC/verify_power_stage.py
 
+      - name: Verify generated JLC device binding manifest
+        run: python JLC/build_jlc_binding_manifest.py --check
+
       - name: Self-test JLCEDA BOM/CPL round-trip verifier
         run: python JLC/verify_jlc_export.py --self-test
 
       - name: Syntax-check JLCEDA Rev A helpers
         run: |
           node --check JLC/jlceda-scripts/import-rev-a-kicad.js
+          node --check JLC/jlceda-scripts/audit-jlc-library-bindings.js
           node --check JLC/jlceda-scripts/export-rev-a-audit.js
 
       - name: Build deterministic JLCEDA KiCad migration bundle
@@ -50,5 +54,17 @@ jobs:
         with:
           name: SPINC-JLC-Rev-A-KiCad-${{ github.sha }}
           path: JLC/out/SPINC-JLC-Rev-A-KiCad.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish JLCEDA audit kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: SPINC-JLC-Rev-A-Audit-Kit-${{ github.sha }}
+          path: |
+            JLC/jlc-bindings.json
+            JLC/jlceda-scripts/import-rev-a-kicad.js
+            JLC/jlceda-scripts/audit-jlc-library-bindings.js
+            JLC/jlceda-scripts/export-rev-a-audit.js
           if-no-files-found: error
           retention-days: 30
