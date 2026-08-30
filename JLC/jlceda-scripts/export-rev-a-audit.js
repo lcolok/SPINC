@@ -10,6 +10,8 @@
  *   - SPINC-JLC-Rev-A-BOM.csv
  *   - SPINC-JLC-Rev-A-CPL.csv
  *   - SPINC-JLC-Rev-A-Netlist.*
+ *   - SPINC-JLC-Rev-A-Gerber.zip
+ *   - SPINC-JLC-Rev-A-PCB-Info.*
  *
  * The BOM export is intentionally configured instead of relying on the user's
  * current/default BOM template.  In particular, JLCEDA's "Supplier Part"
@@ -24,22 +26,24 @@
 
 async function saveRequired(file, name) {
   if (!file) {
-    throw new Error(`${name}: JLCEDA returned no file`);
+    throw new Error(`${name || 'export'}: JLCEDA returned no file`);
   }
-  await eda.sys_FileSystem.saveFile(file, name);
+  if (name) {
+    await eda.sys_FileSystem.saveFile(file, name);
+  } else {
+    await eda.sys_FileSystem.saveFile(file);
+  }
 }
 
 async function runPcbDrc() {
-  // includeVerboseError=true asks current JLCEDA Pro for the detailed finding
-  // array.  We keep exporting even when findings exist so the evidence bundle
-  // can be inspected; a non-zero DRC count is never a manufacturing approval.
+  // With includeVerboseError=true, current JLCEDA Pro documents this call as
+  // always returning the complete array of DRC findings.
   const result = await eda.pcb_Drc.check(true, true, true);
-  if (Array.isArray(result)) {
-    console.log(`[SPINC Rev A] PCB DRC findings: ${result.length}`, result);
-    return { count: result.length, result };
+  if (!Array.isArray(result)) {
+    throw new Error('PCB DRC API returned an unexpected non-array result');
   }
-  console.log('[SPINC Rev A] PCB DRC result:', result);
-  return { count: result === true ? 0 : -1, result };
+  console.log(`[SPINC Rev A] PCB DRC findings: ${result.length}`, result);
+  return { count: result.length, result };
 }
 
 async function exportRevAAudit() {
@@ -94,6 +98,24 @@ async function exportRevAAudit() {
   );
   await saveRequired(netlistFile, 'SPINC-JLC-Rev-A-Netlist');
 
+  // Gerber is mandatory evidence because BOM/CPL cannot detect a changed board
+  // outline, internal cutout or copper-pour rebuild.  Use JLC production-default
+  // layers/objects and a deterministic metric coordinate format.
+  const gerberFile = await eda.pcb_ManufactureData.getGerberFile(
+    'SPINC-JLC-Rev-A-Gerber',
+    false,
+    ESYS_Unit.MILLIMETER,
+    { integerNumber: 2, decimalNumber: 6 },
+  );
+  await saveRequired(gerberFile, 'SPINC-JLC-Rev-A-Gerber.zip');
+
+  // JLCEDA's PCB information export records board-level statistics such as the
+  // copper-layer count.  Keep its native extension/name chosen by the API.
+  const pcbInfoFile = await eda.pcb_ManufactureData.getPcbInfoFile(
+    'SPINC-JLC-Rev-A-PCB-Info',
+  );
+  await saveRequired(pcbInfoFile);
+
   const summary = {
     project: 'SPINC-JLC-Rev-A',
     drcFindingCount: drc.count,
@@ -102,6 +124,8 @@ async function exportRevAAudit() {
       'SPINC-JLC-Rev-A-BOM.csv',
       'SPINC-JLC-Rev-A-CPL.csv',
       'SPINC-JLC-Rev-A-Netlist',
+      'SPINC-JLC-Rev-A-Gerber.zip',
+      'SPINC-JLC-Rev-A-PCB-Info.*',
     ],
   };
   console.log('[SPINC Rev A] Audit export complete:', summary);
