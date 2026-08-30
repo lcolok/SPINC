@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "intent": "Freeze the upstream SPINC DS2712 switch-mode charger power stage for golden JLC Rev A. This file documents equivalence constraints only; do not treat it as a redesign specification.",
+  "references": {
+    "ds2712_datasheet": "https://www.analog.com/media/en/technical-documentation/data-sheets/ds2711-ds2712.pdf",
+    "ds2712_switching_note": "https://www.analog.com/en/resources/design-notes/estimating-switching-speed-for-the-ds2712-nimh-battery-charger.html",
+    "usb_nimh_reference": "https://www.analog.com/en/resources/technical-articles/2022/07/16/09/15/usb-battery-charging-overview--maxim-integrated.html"
+  },
+  "control_stage": {
+    "description": "U8/DS2712 CC1 enables the current-control loop through Q4. When enabled, U8/CSOUT hysteretically controls the Q5 switching-PMOS gate through Q4. R37 pulls the Q5 gate back to 5 V (off); R36 biases Q4 gate-to-source.",
+    "gate_enable_mosfet": {
+      "reference": "Q4",
+      "mpn": "DMG2301L",
+      "lcsc": "C102619",
+      "package": "SOT-23",
+      "pads": [
+        {"pin": 1, "function": "G", "net": "Net-(Q4-G)", "role": "from U8.1/CC1"},
+        {"pin": 2, "function": "S", "net": "Net-(Q4-S)", "role": "Q5 gate-control node"},
+        {"pin": 3, "function": "D", "net": "Net-(Q4-D)", "role": "to U8.6/CSOUT"}
+      ]
+    },
+    "gate_source_bias": {
+      "reference": "R36",
+      "value": "10k",
+      "lcsc": "C98220",
+      "pad_1_net": "Net-(Q4-G)",
+      "pad_2_net": "Net-(Q4-S)"
+    },
+    "switch_gate_pullup": {
+      "reference": "R37",
+      "value": "330",
+      "lcsc": "C105881",
+      "pad_1_net": "5V",
+      "pad_2_net": "Net-(Q4-S)"
+    },
+    "controller_handoff": {
+      "cc1": {"reference": "U8", "pin": 1, "function": "CC1", "net": "Net-(Q4-G)"},
+      "csout": {"reference": "U8", "pin": 6, "function": "CSOUT", "net": "Net-(Q4-D)"}
+    }
+  },
+  "buck_stage": {
+    "description": "5 V feeds Q5, the main P-channel switching MOSFET. Its drain is the switch node shared with the D2 catch diode and L1 input. L1 feeds the output node; D4 provides series isolation into the H-bridge/high battery rail. D3 clamps the L1 output node toward 5 V for positive transients.",
+    "input_decoupling": {
+      "reference": "C30",
+      "value": "10uF",
+      "lcsc": "C15850",
+      "pad_1_net": "5V",
+      "pad_2_net": "GND"
+    },
+    "switch_mosfet": {
+      "reference": "Q5",
+      "mpn": "SI2305CDS",
+      "lcsc": "C37577",
+      "package": "SOT-23",
+      "pads": [
+        {"pin": 1, "function": "G", "net": "Net-(Q4-S)", "role": "switch gate"},
+        {"pin": 2, "function": "S", "net": "5V", "role": "5 V source"},
+        {"pin": 3, "function": "D", "net": "Net-(D2-K)", "role": "buck switch node"}
+      ]
+    },
+    "catch_diode": {
+      "reference": "D2",
+      "value": "MBRA340",
+      "lcsc": "C26178",
+      "pad_1_net": "Net-(D2-K)",
+      "pad_2_net": "GND",
+      "note": "KiCad D_SMA pad 1 is K and pad 2 is A; this is the freewheel/catch diode from GND to the switch node."
+    },
+    "inductor": {
+      "reference": "L1",
+      "value": "SRP7050TA-470M",
+      "inductance_uH": 47,
+      "lcsc": "C2047110",
+      "pad_1_net": "Net-(D3-A)",
+      "pad_2_net": "Net-(D2-K)"
+    },
+    "output_series_diode": {
+      "reference": "D4",
+      "value": "MBRA340",
+      "lcsc": "C26178",
+      "pad_1_net": "Net-(D4-K)",
+      "pad_2_net": "Net-(D3-A)",
+      "note": "KiCad D_SMA pad 1 is K and pad 2 is A; current flows from the L1 output node toward the battery/H-bridge high rail."
+    },
+    "output_clamp": {
+      "reference": "D3",
+      "value": "MMBD4148",
+      "lcsc": "C2928912",
+      "pads": [
+        {"pin": 1, "net": "Net-(D3-A)", "role": "anode at L1 output node"},
+        {"pin": 2, "net": "unconnected-(D3-NC-Pad2)", "role": "package NC; must stay explicit NC"},
+        {"pin": 3, "net": "5V", "role": "cathode to 5 V clamp rail"}
+      ]
+    },
+    "power_path": [
+      "5V",
+      "Q5.2/S",
+      "Q5.3/D",
+      "Net-(D2-K)",
+      "L1.2",
+      "L1.1",
+      "Net-(D3-A)",
+      "D4.2/A",
+      "D4.1/K",
+      "Net-(D4-K)",
+      "Q2.7/P1S-P2S",
+      "BAT_A/BAT_B through polarity bridge",
+      "Q2.3/N1S-N2S",
+      "R34=0.124ohm",
+      "GND"
+    ]
+  },
+  "bridge_handoff": {
+    "high_rail_net": "Net-(D4-K)",
+    "high_rail_consumers": [
+      {"reference": "U8", "pin": 15, "function": "VP1"},
+      {"reference": "Q2", "pin": 7, "function": "P1S/P2S"}
+    ],
+    "low_rail_net": "Net-(Q2-N1S{slash}N2S)",
+    "low_rail_consumers": [
+      {"reference": "Q2", "pin": 3, "function": "N1S/N2S"},
+      {"reference": "R34", "pin": 1, "function": "sense resistor high side"},
+      {"reference": "R35", "pin": 2, "function": "VN1 sense-filter feed"}
+    ]
+  },
+  "safety_invariants": [
+    "Q5, not Q4, remains the main 5 V switching PMOS.",
+    "U8.CC1 must remain connected to Q4 gate and U8.CSOUT to Q4 drain.",
+    "Q4 source, Q5 gate, R36.2 and R37.2 must remain one shared gate-control node.",
+    "R37 must continue pulling the Q5 gate-control node to 5 V so the switching PMOS defaults off.",
+    "D2 remains the catch diode from GND to the Q5/L1 switch node.",
+    "L1 remains 47 uH in golden Rev A; do not substitute merely for sourcing optimization.",
+    "D4 remains in series between the L1 output node and the H-bridge/VP1 high rail.",
+    "D3 pin 2 remains explicitly NC and its clamp orientation must not be reversed during JLC library remapping.",
+    "The DS2712 current-sense return remains the separate R34/R35 low-rail path frozen in critical-charger-audit.json.",
+    "Rev A layout migration must preserve a compact high-di/dt loop around Q5, D2 and L1 and preserve Kelvin-quality R34/R35 sensing."
+  ]
+}
