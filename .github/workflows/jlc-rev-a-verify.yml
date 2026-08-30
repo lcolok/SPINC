@@ -34,6 +34,9 @@ jobs:
           python JLC/verify_rev_a.py
           python JLC/verify_power_stage.py
 
+      - name: Self-test JLCEDA BOM/CPL round-trip verifier
+        run: python JLC/verify_jlc_export.py --self-test
+
       - name: Build deterministic JLCEDA KiCad migration bundle
         run: python JLC/build_migration_bundle.py
 
