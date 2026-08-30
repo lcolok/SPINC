@@ -30,7 +30,9 @@ jobs:
           python-version: '3.11'
 
       - name: Verify JLC Rev A equivalence guardrails
-        run: python JLC/verify_rev_a.py
+        run: |
+          python JLC/verify_rev_a.py
+          python JLC/verify_power_stage.py
 
       - name: Build deterministic JLCEDA KiCad migration bundle
         run: python JLC/build_migration_bundle.py
