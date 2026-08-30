@@ -42,6 +42,8 @@ BOM_LCSC_COLUMNS = (
     "JLCPCB Part #",
     "JLCPCB Part Number",
     "JLC Part #",
+    "Supplier Part",
+    "Supplier Part #",
 )
 CPL_DESIGNATOR_COLUMNS = BOM_DESIGNATOR_COLUMNS
 CPL_X_COLUMNS = ("Mid X", "Mid X (mm)", "MidX", "X", "X (mm)")
