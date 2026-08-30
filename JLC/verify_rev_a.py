@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "JLC" / "rev-a-baseline.json"
+CHARGER_AUDIT = ROOT / "JLC" / "critical-charger-audit.json"
 PCB = ROOT / "PCB" / "SPINC AA Charger" / "SPINC AA Charger.kicad_pcb"
 SCH = ROOT / "PCB" / "SPINC AA Charger" / "SPINC AA Charger.kicad_sch"
 BOM = ROOT / "PCB" / "SPINC AA Charger" / "production" / "bom.csv"
@@ -41,7 +42,40 @@ def split_designators(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def footprint_block(pcb: str, ref: str) -> str:
+    """Return one top-level KiCad footprint block selected by Reference."""
+    marker = f'(property "Reference" "{ref}"'
+    ref_at = pcb.find(marker)
+    if ref_at < 0:
+        return ""
+    start = pcb.rfind("\n\t(footprint ", 0, ref_at)
+    if start < 0:
+        return ""
+    end = pcb.find("\n\t(footprint ", ref_at)
+    if end < 0:
+        end = len(pcb)
+    return pcb[start:end]
+
+
+def pad_map(block: str) -> dict[str, dict[str, str]]:
+    """Extract pad -> {net,function} from one KiCad footprint block."""
+    result: dict[str, dict[str, str]] = {}
+    pad_starts = list(re.finditer(r'\n\t\t\(pad "([^"]*)"', block))
+    for index, match in enumerate(pad_starts):
+        pin = match.group(1)
+        stop = pad_starts[index + 1].start() if index + 1 < len(pad_starts) else len(block)
+        pad = block[match.start():stop]
+        net_match = re.search(r'\(net \d+ "([^"]+)"\)', pad)
+        fn_match = re.search(r'\(pinfunction "([^"]+)"\)', pad)
+        result[pin] = {
+            "net": net_match.group(1) if net_match else "",
+            "function": fn_match.group(1) if fn_match else "",
+        }
+    return result
+
+
 manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+charger = json.loads(CHARGER_AUDIT.read_text(encoding="utf-8"))
 pcb_text = PCB.read_text(encoding="utf-8")
 sch_text = SCH.read_text(encoding="utf-8")
 bom_rows = read_csv(BOM)
@@ -84,6 +118,7 @@ expected_parts = {
     "U8": ("DS2712E+", "C7455651"),
     "L1": ("SRP7050TA-470M", "C2047110"),
     "R34": ("0R124", "C875831"),
+    "R35": ("10", "C109318"),
     "J4": ("Conn_01x01_Pin", "C3029553"),
     "J5": ("Conn_01x01_Pin", "C3029553"),
 }
@@ -93,6 +128,43 @@ for ref, (value, lcsc) in expected_parts.items():
     if row:
         require(row["Value"].strip() == value, f"{ref} value is frozen to {value}")
         require(row["LCSC Part #"].strip() == lcsc, f"{ref} LCSC identity is frozen to {lcsc}")
+
+# ---- DS2712 pin/net equivalence ------------------------------------------
+require(charger["device"]["reference"] == "U8", "charger audit targets U8")
+require(charger["device"]["mpn"] == "DS2712E+", "charger audit MPN is DS2712E+")
+require(charger["device"]["lcsc"] == "C7455651", "charger audit LCSC identity is C7455651")
+
+u8_block = footprint_block(pcb_text, "U8")
+require(bool(u8_block), "U8 footprint exists in source PCB")
+u8_pads = pad_map(u8_block)
+require(len(u8_pads) == 16, "U8 has exactly 16 physical pads")
+for expected in charger["pins"]:
+    pin = str(expected["pin"])
+    actual = u8_pads.get(pin)
+    require(actual is not None, f"U8 pin {pin}/{expected['name']} exists")
+    if actual:
+        require(actual["function"] == expected["name"], f"U8 pin {pin} function remains {expected['name']}")
+        require(actual["net"] == expected["net"], f"U8 pin {pin}/{expected['name']} net remains {expected['net']}")
+
+nc_pins = [str(pin) for pin in charger["critical_paths"]["single_cell_channel_policy"]["intentionally_unused_channel_2_pins"]]
+for pin in nc_pins:
+    actual = u8_pads.get(pin, {})
+    require(actual.get("net", "").startswith("unconnected-(U8-"), f"U8 channel-2 pin {pin} stays explicitly NC")
+
+# ---- DS2712 current-sense path -------------------------------------------
+current_sense = charger["critical_paths"]["current_sense"]
+for key in ("sense_resistor", "sense_filter_resistor"):
+    expected = current_sense[key]
+    ref = expected["reference"]
+    block = footprint_block(pcb_text, ref)
+    require(bool(block), f"{ref} current-sense footprint exists")
+    pads = pad_map(block)
+    require(pads.get("1", {}).get("net") == expected["pad_1_net"], f"{ref}.1 current-sense net is frozen")
+    require(pads.get("2", {}).get("net") == expected["pad_2_net"], f"{ref}.2 current-sense net is frozen")
+
+require(abs(float(current_sense["ds2712_typical_threshold_v"]) / float(current_sense["sense_resistor"]["value_ohm"]) - float(current_sense["nominal_regulation_current_a"])) < 1e-6, "documented nominal DS2712 regulation-current calculation is self-consistent")
+require(u8_pads.get("7", {}).get("net") == current_sense["sense_filter_resistor"]["pad_1_net"], "U8.VN1 enters R35 sense-filter net")
+require(u8_pads.get("8", {}).get("net") == "GND", "U8.VN0 remains at GND")
 
 # ---- Pick-and-place / mechanical placement freeze ------------------------
 pos_by_ref = {row["Designator"].strip(): row for row in pos_rows}
