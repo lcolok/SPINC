@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "device": {
+    "reference": "U8",
+    "mpn": "DS2712E+",
+    "lcsc": "C7455651",
+    "package": "TSSOP-16_4.4x5mm_P0.65mm",
+    "datasheet": "https://www.analog.com/media/en/technical-documentation/data-sheets/ds2711-ds2712.pdf",
+    "datasheet_revision": "Rev 4/11"
+  },
+  "intent": "Freeze the upstream DS2712 charger-controller pinout and critical current-sense path for JLC Rev A. These are equivalence constraints, not redesign targets.",
+  "pins": [
+    {"pin": 1,  "name": "CC1",   "net": "Net-(Q4-G)",                    "state": "connected", "role": "cell-1 charge-control output"},
+    {"pin": 2,  "name": "CC2",   "net": "unconnected-(U8-CC2-Pad2)",   "state": "nc",        "role": "cell-2 charge-control output; unused in SPINC"},
+    {"pin": 3,  "name": "LED1",  "net": "CHG_STAT",                      "state": "connected", "role": "cell-1 charge/status signal"},
+    {"pin": 4,  "name": "VSS",   "net": "GND",                           "state": "connected", "role": "ground and chip-supply return"},
+    {"pin": 5,  "name": "LED2",  "net": "GND",                           "state": "connected", "role": "cell-2 status/mode-select input strapped low"},
+    {"pin": 6,  "name": "CSOUT", "net": "Net-(Q4-D)",                    "state": "connected", "role": "current-sense comparator output"},
+    {"pin": 7,  "name": "VN1",   "net": "Net-(U8-VN1)",                  "state": "connected", "role": "current-sense positive input"},
+    {"pin": 8,  "name": "VN0",   "net": "GND",                           "state": "connected", "role": "current-sense negative input"},
+    {"pin": 9,  "name": "DMSEL", "net": "GND",                           "state": "connected", "role": "display-mode select strapped low"},
+    {"pin": 10, "name": "CTST",  "net": "Net-(U8-CTST)",                 "state": "connected", "role": "cell-test threshold set"},
+    {"pin": 11, "name": "TMR",   "net": "Net-(U8-TMR)",                  "state": "connected", "role": "charge timer set"},
+    {"pin": 12, "name": "VDD",   "net": "Net-(U8-VDD)",                  "state": "connected", "role": "4.0-5.5 V chip supply"},
+    {"pin": 13, "name": "THM1",  "net": "Net-(U8-THM1)",                 "state": "connected", "role": "cell-1 thermistor input"},
+    {"pin": 14, "name": "THM2",  "net": "unconnected-(U8-THM2-Pad14)", "state": "nc",        "role": "cell-2 thermistor input; unused in SPINC"},
+    {"pin": 15, "name": "VP1",   "net": "Net-(D4-K)",                    "state": "connected", "role": "cell-1 positive-terminal sense input"},
+    {"pin": 16, "name": "VP2",   "net": "unconnected-(U8-VP2-Pad16)",   "state": "nc",        "role": "cell-2 positive-terminal sense input; unused in SPINC"}
+  ],
+  "critical_paths": {
+    "current_sense": {
+      "description": "DS2712 switch-mode current-regulation sense path. Preserve topology and Kelvin-quality routing during JLCEDA migration.",
+      "vn1_path": [
+        "U8.7/VN1",
+        "Net-(U8-VN1)",
+        "R35.1",
+        "R35=10ohm",
+        "R35.2",
+        "Net-(Q2-N1S/N2S)",
+        "R34.1",
+        "R34=0.124ohm",
+        "R34.2",
+        "GND"
+      ],
+      "vn0": "U8.8/VN0 -> GND",
+      "sense_resistor": {
+        "reference": "R34",
+        "value_ohm": 0.124,
+        "package": "2512",
+        "lcsc": "C875831",
+        "pad_1_net": "Net-(Q2-N1S/N2S)",
+        "pad_2_net": "GND"
+      },
+      "sense_filter_resistor": {
+        "reference": "R35",
+        "value_ohm": 10.0,
+        "package": "0603",
+        "lcsc": "C109318",
+        "pad_1_net": "Net-(U8-VN1)",
+        "pad_2_net": "Net-(Q2-N1S/N2S)"
+      },
+      "ds2712_typical_threshold_v": 0.125,
+      "nominal_regulation_current_a": 1.0080645161,
+      "calculation": "0.125 V / 0.124 ohm ~= 1.008 A"
+    },
+    "single_cell_channel_policy": {
+      "active_channel": 1,
+      "intentionally_unused_channel_2_pins": [2, 14, 16],
+      "note": "CC2, THM2 and VP2 must remain NC in golden Rev A. Do not auto-connect them during symbol/library remapping."
+    }
+  }
+}
