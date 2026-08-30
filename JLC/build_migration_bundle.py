@@ -65,10 +65,16 @@ def collect_files() -> list[Path]:
     return sorted(set(files), key=lambda p: p.relative_to(SOURCE).as_posix())
 
 
+def run_reproduction_guardrails() -> None:
+    """Keep the migration artifact downstream of every golden-Rev-A gate."""
+    for verifier in ("verify_rev_a.py", "verify_power_stage.py"):
+        subprocess.run([sys.executable, str(ROOT / "JLC" / verifier)], check=True)
+
+
 def build(output: Path) -> dict[str, object]:
     # Refuse to package a source tree that no longer passes the reproduction
     # guardrails.  This keeps the migration ZIP downstream of the same SSoT.
-    subprocess.run([sys.executable, str(ROOT / "JLC" / "verify_rev_a.py")], check=True)
+    run_reproduction_guardrails()
 
     members = collect_files()
     manifest_files: list[dict[str, object]] = []
