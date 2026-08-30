@@ -37,8 +37,10 @@ jobs:
       - name: Self-test JLCEDA BOM/CPL round-trip verifier
         run: python JLC/verify_jlc_export.py --self-test
 
-      - name: Syntax-check JLCEDA audit helper
-        run: node --check JLC/jlceda-scripts/export-rev-a-audit.js
+      - name: Syntax-check JLCEDA Rev A helpers
+        run: |
+          node --check JLC/jlceda-scripts/import-rev-a-kicad.js
+          node --check JLC/jlceda-scripts/export-rev-a-audit.js
 
       - name: Build deterministic JLCEDA KiCad migration bundle
         run: python JLC/build_migration_bundle.py
