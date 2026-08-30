@@ -40,11 +40,13 @@ jobs:
       - name: Validate pinned JLC harness provenance
         run: python -m json.tool JLC/harness-pin.json >/dev/null
 
+      - name: Verify declarative flow assets are present
+        run: |
+          test "$(cat JLC/rev-a/board-id)" = "spinc-jlc-rev-a"
+          test -s JLC/rev-a/flows/migrate.yaml
+
       - name: Self-test JLCEDA BOM/CPL round-trip verifier
         run: python JLC/verify_jlc_export.py --self-test
-
-      - name: Syntax-check fail-closed runtime runner
-        run: bash -n JLC/run_rev_a_harness.sh
 
       - name: Syntax-check JLCEDA Rev A fallback helpers
         run: |
@@ -70,7 +72,8 @@ jobs:
           path: |
             JLC/harness-pin.json
             JLC/jlc-bindings.json
-            JLC/run_rev_a_harness.sh
+            JLC/rev-a/board-id
+            JLC/rev-a/flows/migrate.yaml
             JLC/jlceda-scripts/import-rev-a-kicad.js
             JLC/jlceda-scripts/audit-jlc-library-bindings.js
             JLC/jlceda-scripts/export-rev-a-audit.js
