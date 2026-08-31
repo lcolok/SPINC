@@ -2,8 +2,9 @@
   "schema": 1,
   "repository": "lcolok/jlc-eda-research",
   "branch": "main",
-  "commit": "3d5a155461c11791dc907c23eb8b69bc036e13f2",
+  "commit": "197c8eeb18c4f84d49062ca2087a67fe79315c0c",
   "requiredCapabilities": [
+    "live runner-once",
     "flow validate",
     "flow run --from",
     "flow status",
@@ -19,7 +20,8 @@
   "primaryEntryPoint": "jlc flow run --board JLC/rev-a --flow migrate",
   "validationEntryPoint": "jlc flow validate --board JLC/rev-a --flow migrate",
   "recoveryEntryPoint": "jlc flow run --board JLC/rev-a --flow migrate --from <stage-id>",
+  "liveExecutorEntryPoint": "jlc live runner-once --repo lcolok/jlc-eda-research --label jlceda-live",
   "flowSpec": "JLC/rev-a/flows/migrate.yaml",
   "fallback": "JLC/jlceda-scripts/*.js",
-  "intent": "Pin the shared Go Flow Harness used for the SPINC Golden Rev A runtime migration and evidence pipeline; SPINC carries declarative flow data, not shell orchestration."
+  "intent": "Pin the shared Go Flow Harness plus one-shot outbound Mac execution transport used for the SPINC Golden Rev A live JLCEDA migration and evidence pipeline; SPINC carries declarative flow data, not shell orchestration."
 }
