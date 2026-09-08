@@ -43,7 +43,7 @@ jobs:
           test "$(cat JLC/rev-a/board-id)" = "spinc-jlc-rev-a"
           test -s JLC/rev-a/flows/migrate.yaml
           python JLC/verify_jlc_export.py --self-test
-          python -m unittest discover -s JLC -p 'test_source_governance.py' -v 2>&1 | tee JLC/out/governance-tests.txt
+          python -m unittest discover -s JLC -p 'test_*.py' -v 2>&1 | tee JLC/out/governance-tests.txt
           node --check JLC/jlceda-scripts/import-rev-a-kicad.js
           node --check JLC/jlceda-scripts/audit-jlc-library-bindings.js
           node --check JLC/jlceda-scripts/export-rev-a-audit.js

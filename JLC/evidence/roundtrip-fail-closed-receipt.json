@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "qualification": "local-verifier-regression-not-live-migration-or-hardware-validation",
+  "baseline_source_commit": "91a2aee6b2c4cdad9e90cc642c09be0d0cfd61d6",
+  "original_verifier_blob": "49a5382a4204b4c462b0b9f4887bdcfaabf15eb8",
+  "new_tests": 43,
+  "existing_governance_tests": 12,
+  "cases": [
+    {
+      "case": "baseline",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 0,
+      "after_result": "pass"
+    },
+    {
+      "case": "nan_coordinates",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 1,
+      "after_result": "fail"
+    },
+    {
+      "case": "nan_rotation",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 1,
+      "after_result": "fail"
+    },
+    {
+      "case": "missing_zero_rotation",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 1,
+      "after_result": "fail"
+    },
+    {
+      "case": "mislabeled_mil",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 1,
+      "after_result": "fail"
+    },
+    {
+      "case": "wrong_bom_quantity",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 1,
+      "after_result": "fail"
+    },
+    {
+      "case": "ambiguous_part",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 1,
+      "after_result": "fail"
+    },
+    {
+      "case": "nan_tolerance_with_drift",
+      "before_exit_code": 0,
+      "before_result": "pass",
+      "after_exit_code": 1,
+      "after_result": "fail"
+    }
+  ]
+}

@@ -21,9 +21,11 @@ import argparse
 import csv
 import json
 import math
+import os
 import re
 import statistics
 import sys
+import tempfile
 from pathlib import Path
 from typing import Iterable
 
@@ -34,6 +36,8 @@ DEFAULT_REPORT = ROOT / "JLC" / "out" / "jlc-export-verification.json"
 
 DNP_REFS = {"TH3"}
 CPL_ONLY_ALLOWED = {"TH3", "FID1", "FID2", "FID3", "FID4"}
+
+BOM_QUANTITY_COLUMNS = ("Quantity", "Qty")
 
 BOM_DESIGNATOR_COLUMNS = ("Designator", "Reference", "References", "Ref", "Ref Des")
 BOM_LCSC_COLUMNS = (
@@ -46,41 +50,86 @@ BOM_LCSC_COLUMNS = (
     "Supplier Part #",
 )
 CPL_DESIGNATOR_COLUMNS = BOM_DESIGNATOR_COLUMNS
-CPL_X_COLUMNS = ("Mid X", "Mid X (mm)", "MidX", "X", "X (mm)")
-CPL_Y_COLUMNS = ("Mid Y", "Mid Y (mm)", "MidY", "Y", "Y (mm)")
+CPL_X_COLUMNS = ("Mid X", "Mid X (mm)", "MidX", "X", "X (mm)", "Mid X (mil)", "X (mil)")
+CPL_Y_COLUMNS = ("Mid Y", "Mid Y (mm)", "MidY", "Y", "Y (mm)", "Mid Y (mil)", "Y (mil)")
 CPL_ROT_COLUMNS = ("Rotation", "Rot", "Rotation (deg)")
 CPL_LAYER_COLUMNS = ("Layer", "Side")
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        return list(csv.DictReader(handle))
+        reader = csv.DictReader(handle, strict=True)
+        headers = reader.fieldnames or []
+        normalized = [h.strip().lower() for h in headers]
+        if not headers or any(not h for h in normalized) or len(set(normalized)) != len(normalized):
+            raise ValueError(f"{path.name}: empty or duplicate CSV headers")
+        rows = list(reader)
+        for number, row in enumerate(rows, 2):
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"{path.name}: row {number} does not match the CSV header width")
+        return rows
 
 
 def first_column(headers: Iterable[str], aliases: tuple[str, ...], label: str) -> str:
     normalized = {h.strip().lower(): h for h in headers if h is not None}
-    for alias in aliases:
-        match = normalized.get(alias.lower())
-        if match is not None:
-            return match
-    raise ValueError(f"missing {label} column; accepted names: {', '.join(aliases)}")
+    matches = [normalized[alias.lower()] for alias in aliases if alias.lower() in normalized]
+    if len(matches) != 1:
+        raise ValueError(f"expected exactly one {label} column; found {matches}")
+    return matches[0]
 
 
 def refs_from_cell(value: str) -> list[str]:
-    # Designators in JLC/KiCad BOMs are commonly comma-separated; regex keeps
-    # the parser tolerant of semicolon/space-separated exports without relying
-    # on a particular grouping style.
-    return re.findall(r"[A-Za-z]+\d+", value or "")
+    text = (value or "").strip()
+    if not text:
+        return []
+    # Accept explicit comma/semicolon/space lists, never silently discard a
+    # range, suffix, or malformed extra reference from a manufacturing file.
+    refs = [item for item in re.split(r"[,;\s]+", text) if item]
+    if not refs or any(not re.fullmatch(r"[A-Za-z]+[0-9]+", item) for item in refs):
+        raise ValueError(f"invalid designator list: {value!r}")
+    return [item.upper() for item in refs]
 
 
 def normalize_lcsc(value: str) -> str:
-    match = re.search(r"\bC\d+\b", (value or "").upper())
-    return match.group(0) if match else (value or "").strip()
+    text = (value or "").strip().upper()
+    if not re.fullmatch(r"C[0-9]+", text):
+        raise ValueError(f"expected exactly one LCSC/JLC C-number, got {value!r}")
+    return text
 
 
-def parse_mm(value: str) -> float:
-    text = (value or "").strip().lower().replace("mm", "").replace("mil", "")
-    return float(text)
+def finite_number(value: str, label: str) -> float:
+    text = (value or "").strip()
+    # float() alone accepts NaN/Inf, which can bypass greater-than tolerance
+    # comparisons. Empty angles must not silently become a valid zero.
+    if not re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", text):
+        raise ValueError(f"{label}: expected a finite number, got {value!r}")
+    number = float(text)
+    if not math.isfinite(number):
+        raise ValueError(f"{label}: non-finite number")
+    return number
+
+
+def parse_mm(value: str, column_unit: str | None = None) -> float:
+    text = (value or "").strip().lower()
+    match = re.fullmatch(r"(.*?)\s*(mm|mil)?", text)
+    if match is None:
+        raise ValueError(f"invalid coordinate: {value!r}")
+    number = finite_number(match.group(1), "coordinate")
+    suffix = match.group(2)
+    if column_unit and suffix and column_unit != suffix:
+        raise ValueError(f"coordinate suffix {suffix} contradicts {column_unit} header")
+    unit = suffix or column_unit or "mm"
+    if unit not in {"mm", "mil"}:
+        raise ValueError(f"unsupported coordinate unit: {unit}")
+    result = number * (0.0254 if unit == "mil" else 1.0)
+    if not math.isfinite(result):
+        raise ValueError("non-finite coordinate after unit conversion")
+    return result
+
+
+def column_unit(header: str) -> str | None:
+    match = re.search(r"\((mm|mil)\)$", header.strip(), re.IGNORECASE)
+    return match.group(1).lower() if match else None
 
 
 def normalize_layer(value: str) -> str:
@@ -89,7 +138,22 @@ def normalize_layer(value: str) -> str:
         return "top"
     if text in {"b", "bottom", "back", "rear", "bottomsurface", "bottomlayer"}:
         return "bottom"
-    return text
+    raise ValueError(f"unknown or missing assembly side: {value!r}")
+
+
+def write_report(path: Path, report: dict[str, object]) -> None:
+    """Atomically replace previous evidence; never serialize NaN/Infinity."""
+    payload = json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+            temp_path = Path(handle.name)
+            handle.write(payload)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def angle_error(a: float, b: float) -> float:
@@ -102,13 +166,22 @@ def flatten_bom(rows: list[dict[str, str]], source_name: str) -> dict[str, dict[
     headers = rows[0].keys()
     designator_col = first_column(headers, BOM_DESIGNATOR_COLUMNS, "BOM designator")
     lcsc_col = first_column(headers, BOM_LCSC_COLUMNS, "BOM LCSC/JLC part number")
+    quantity_col = None
+    if any(h.strip().lower() in {a.lower() for a in BOM_QUANTITY_COLUMNS} for h in headers):
+        quantity_col = first_column(headers, BOM_QUANTITY_COLUMNS, "BOM quantity")
 
     result: dict[str, dict[str, str]] = {}
     for row in rows:
         refs = refs_from_cell(row.get(designator_col, ""))
         if not refs:
+            if any(str(value or "").strip() for value in row.values()):
+                raise ValueError(f"{source_name}: nonempty row has no designator")
             continue
         lcsc = normalize_lcsc(row.get(lcsc_col, ""))
+        if quantity_col is not None:
+            quantity = (row.get(quantity_col, "") or "").strip()
+            if not re.fullmatch(r"[0-9]+", quantity) or int(quantity) != len(refs):
+                raise ValueError(f"{source_name}: quantity {quantity!r} does not match {len(refs)} designators")
         for ref in refs:
             if ref in result:
                 raise ValueError(f"{source_name}: duplicate BOM designator {ref}")
@@ -130,6 +203,8 @@ def flatten_cpl(rows: list[dict[str, str]], source_name: str) -> dict[str, dict[
     for row in rows:
         refs = refs_from_cell(row.get(designator_col, ""))
         if not refs:
+            if any(str(value or "").strip() for value in row.values()):
+                raise ValueError(f"{source_name}: nonempty row has no designator")
             continue
         if len(refs) != 1:
             raise ValueError(f"{source_name}: CPL row must contain exactly one designator, got {refs}")
@@ -137,9 +212,9 @@ def flatten_cpl(rows: list[dict[str, str]], source_name: str) -> dict[str, dict[
         if ref in result:
             raise ValueError(f"{source_name}: duplicate CPL designator {ref}")
         result[ref] = {
-            "x": parse_mm(row.get(x_col, "")),
-            "y": parse_mm(row.get(y_col, "")),
-            "rotation": float((row.get(rot_col, "") or "0").strip()),
+            "x": parse_mm(row.get(x_col, ""), column_unit(x_col)),
+            "y": parse_mm(row.get(y_col, ""), column_unit(y_col)),
+            "rotation": finite_number(row.get(rot_col, ""), f"{source_name} {ref} rotation"),
             "layer": normalize_layer(row.get(layer_col, "")),
         }
     return result
@@ -185,7 +260,10 @@ def fit_mode(
         ey = by + ty
         residuals.append(math.hypot(float(actual[ref]["x"]) - ex, float(actual[ref]["y"]) - ey))
 
-    rms = math.sqrt(sum(v * v for v in residuals) / max(1, len(residuals)))
+    if any(not math.isfinite(value) for value in [tx, ty, *residuals]):
+        raise ValueError("non-finite coordinate-fit arithmetic")
+    scale = max(residuals, default=0.0)
+    rms = scale * math.sqrt(sum((value / scale) ** 2 for value in residuals) / len(residuals)) if scale else 0.0
     return {
         "mode": mode,
         "translation_x_mm": tx,
@@ -200,29 +278,51 @@ def main() -> int:
     parser.add_argument("--bom", type=Path, help="JLCEDA/JLCPCB CSV BOM to verify")
     parser.add_argument("--cpl", type=Path, help="JLCEDA/JLCPCB CSV pick-and-place file to verify")
     parser.add_argument("--self-test", action="store_true", help="verify the frozen source BOM/CPL through the same round-trip parser")
-    parser.add_argument("--xy-tolerance-mm", type=float, default=0.02)
-    parser.add_argument("--rotation-tolerance-deg", type=float, default=0.1)
+    parser.add_argument("--xy-tolerance-mm", default="0.02")
+    parser.add_argument("--rotation-tolerance-deg", default="0.1")
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     args = parser.parse_args()
+
+    input_paths = [BASE_BOM, BASE_CPL, *[p for p in (args.bom, args.cpl) if p is not None]]
+    if args.report.resolve() in {p.resolve() for p in input_paths}:
+        print("FAIL: report path must not overwrite a BOM/CPL input")
+        return 1
 
     if args.self_test:
         actual_bom_path = BASE_BOM
         actual_cpl_path = BASE_CPL
     else:
         if args.bom is None or args.cpl is None:
-            parser.error("--bom and --cpl are required unless --self-test is used")
+            write_report(args.report, {"schema": 1, "result": "fail", "phase": "arguments",
+                                       "failures": ["--bom and --cpl are required unless --self-test is used"]})
+            print("FAIL: --bom and --cpl are required unless --self-test is used")
+            return 1
         actual_bom_path = args.bom.resolve()
         actual_cpl_path = args.cpl.resolve()
 
     failures: list[str] = []
     warnings: list[str] = []
-
+    # An interrupted or malformed new evaluation must not leave an older PASS
+    # at the well-known report path for later evidence collection.
+    input_failure = {
+        "schema": 1, "result": "fail", "phase": "input-validation",
+        "qualification": "bom-cpl-only-not-manufacturing-or-golden",
+        "actual_bom": str(actual_bom_path), "actual_cpl": str(actual_cpl_path),
+        "failures": ["verification has not completed"],
+    }
+    write_report(args.report, input_failure)
     try:
+        args.xy_tolerance_mm = finite_number(args.xy_tolerance_mm, "XY tolerance")
+        args.rotation_tolerance_deg = finite_number(args.rotation_tolerance_deg, "rotation tolerance")
+        if args.xy_tolerance_mm < 0 or args.rotation_tolerance_deg < 0:
+            raise ValueError("tolerances must be non-negative")
         base_bom = flatten_bom(read_csv(BASE_BOM), "baseline")
         base_cpl = flatten_cpl(read_csv(BASE_CPL), "baseline")
         actual_bom = flatten_bom(read_csv(actual_bom_path), "JLC export")
         actual_cpl = flatten_cpl(read_csv(actual_cpl_path), "JLC export")
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, csv.Error) as exc:
+        input_failure["failures"] = [str(exc)]
+        write_report(args.report, input_failure)
         print(f"FAIL: {exc}")
         return 1
 
@@ -258,10 +358,16 @@ def main() -> int:
     compare_refs = sorted(expected_assembled & set(actual_cpl) & set(base_cpl))
     geometry_fit: dict[str, float | str] | None = None
     if compare_refs:
-        candidates = [
-            fit_mode(base_cpl, actual_cpl, compare_refs, "identity"),
-            fit_mode(base_cpl, actual_cpl, compare_refs, "mirror-y-coordinate-frame"),
-        ]
+        try:
+            candidates = [
+                fit_mode(base_cpl, actual_cpl, compare_refs, "identity"),
+                fit_mode(base_cpl, actual_cpl, compare_refs, "mirror-y-coordinate-frame"),
+            ]
+        except ValueError as exc:
+            input_failure["failures"] = [str(exc)]
+            write_report(args.report, input_failure)
+            print(f"FAIL: {exc}")
+            return 1
         geometry_fit = min(candidates, key=lambda item: float(item["rms_error_mm"]))
         mode = str(geometry_fit["mode"])
         tx = float(geometry_fit["translation_x_mm"])
@@ -302,6 +408,7 @@ def main() -> int:
 
     report = {
         "schema": 1,
+        "qualification": "bom-cpl-only-not-manufacturing-or-golden",
         "baseline_bom": str(BASE_BOM.relative_to(ROOT)),
         "baseline_cpl": str(BASE_CPL.relative_to(ROOT)),
         "actual_bom": str(actual_bom_path),
@@ -316,8 +423,7 @@ def main() -> int:
         "failures": failures,
         "result": "pass" if not failures else "fail",
     }
-    args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_report(args.report, report)
 
     print(f"SPINC JLC export round-trip: {report['result'].upper()}")
     print(f"assembled refs: {len(expected_assembled)}, compared CPL refs: {len(compare_refs)}")
