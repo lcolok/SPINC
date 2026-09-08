@@ -2,71 +2,100 @@ name: JLC Rev A verification
 
 on:
   push:
-    branches:
-      - jlc-rev-a
-    paths:
-      - 'PCB/**'
-      - 'JLC/**'
-      - '.github/workflows/jlc-rev-a-verify.yml'
+    branches: [main, jlc-rev-a]
   pull_request:
-    paths:
-      - 'PCB/**'
-      - 'JLC/**'
-      - '.github/workflows/jlc-rev-a-verify.yml'
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: jlc-source-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   verify-reproduction-baseline:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout tested commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6, Node 24
         with:
           python-version: '3.11'
 
-      - name: Verify JLC Rev A equivalence guardrails
+      - name: Verify source and tooling
         run: |
-          python JLC/verify_rev_a.py
-          python JLC/verify_power_stage.py
-
-      - name: Verify generated JLC device binding manifest
-        run: python JLC/build_jlc_binding_manifest.py --check
-
-      - name: Validate pinned JLC harness provenance
-        run: python -m json.tool JLC/harness-pin.json >/dev/null
-
-      - name: Verify declarative flow assets are present
-        run: |
+          mkdir -p JLC/out
+          python JLC/verify_rev_a.py | tee JLC/out/source-verification.txt
+          python JLC/verify_power_stage.py | tee JLC/out/power-stage-verification.txt
+          python JLC/build_jlc_binding_manifest.py --check
+          python JLC/verify_harness_pin.py
           test "$(cat JLC/rev-a/board-id)" = "spinc-jlc-rev-a"
           test -s JLC/rev-a/flows/migrate.yaml
-
-      - name: Self-test JLCEDA BOM/CPL round-trip verifier
-        run: python JLC/verify_jlc_export.py --self-test
-
-      - name: Syntax-check JLCEDA Rev A fallback helpers
-        run: |
+          python JLC/verify_jlc_export.py --self-test
+          python -m unittest discover -s JLC -p 'test_source_governance.py' -v 2>&1 | tee JLC/out/governance-tests.txt
           node --check JLC/jlceda-scripts/import-rev-a-kicad.js
           node --check JLC/jlceda-scripts/audit-jlc-library-bindings.js
           node --check JLC/jlceda-scripts/export-rev-a-audit.js
 
-      - name: Build deterministic JLCEDA KiCad migration bundle
-        run: python JLC/build_migration_bundle.py
+      - name: Build and reproduce migration bundle
+        run: |
+          python JLC/build_migration_bundle.py | tee JLC/out/bundle-build.txt
+          python JLC/build_migration_bundle.py --output "$RUNNER_TEMP/reproduction.zip" > "$RUNNER_TEMP/reproduction.log"
+          cmp JLC/out/SPINC-JLC-Rev-A-KiCad.zip "$RUNNER_TEMP/reproduction.zip"
+
+      - name: Record source-only provenance and checksums
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess, zipfile
+          from pathlib import Path
+          git = lambda *args: subprocess.check_output(['git', *args], text=True).strip()
+          commit = git('rev-parse', 'HEAD')
+          if commit != os.environ['GITHUB_SHA']:
+              raise SystemExit('checkout SHA does not match tested GitHub SHA')
+          bundle = Path('JLC/out/SPINC-JLC-Rev-A-KiCad.zip')
+          with zipfile.ZipFile(bundle) as z:
+              manifest = json.loads(z.read('JLC-MIGRATION-MANIFEST.json'))
+              if manifest['source_commit'] != commit or 'source_branch' in manifest:
+                  raise SystemExit('incorrect or branch-dependent bundle provenance')
+          pin = json.loads(Path('JLC/harness-pin.json').read_text())
+          evidence = {
+              'schema': 1, 'qualification': 'source-only-not-manufacturing-or-golden',
+              'source_commit': commit, 'source_tree': git('rev-parse', 'HEAD^{tree}'),
+              'event': os.environ['GITHUB_EVENT_NAME'], 'event_ref': os.environ['GITHUB_REF'],
+              'pr_head_sha': os.getenv('PR_HEAD_SHA') or None,
+              'pr_base_sha': os.getenv('PR_BASE_SHA') or None,
+              'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'harness_commit': pin['commit'],
+              'bundle_sha256': hashlib.sha256(bundle.read_bytes()).hexdigest(),
+          }
+          Path('JLC/out/source-provenance.json').write_text(json.dumps(evidence, indent=2) + '\n')
+          PY
+          (cd JLC/out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 
       - name: Publish migration bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
         with:
           name: SPINC-JLC-Rev-A-KiCad-${{ github.sha }}
           path: JLC/out/SPINC-JLC-Rev-A-KiCad.zip
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
 
       - name: Publish JLCEDA audit kit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
         with:
           name: SPINC-JLC-Rev-A-Audit-Kit-${{ github.sha }}
           path: |
@@ -74,8 +103,86 @@ jobs:
             JLC/jlc-bindings.json
             JLC/rev-a/board-id
             JLC/rev-a/flows/migrate.yaml
-            JLC/jlceda-scripts/import-rev-a-kicad.js
-            JLC/jlceda-scripts/audit-jlc-library-bindings.js
-            JLC/jlceda-scripts/export-rev-a-audit.js
+            JLC/jlceda-scripts/*.js
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
+
+      - name: Publish source verification evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
+        with:
+          name: SPINC-JLC-Rev-A-Source-Evidence-${{ github.sha }}
+          path: JLC/out/
+          if-no-files-found: error
+          retention-days: 90
+
+  validate-pinned-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Require explicit read access to private harness
+        env:
+          HARNESS_TOKEN: ${{ secrets.JLC_HARNESS_READ_TOKEN }}
+        run: |
+          if [[ -z "$HARNESS_TOKEN" ]]; then
+            echo '::error::Configure JLC_HARNESS_READ_TOKEN with read-only Contents access to lcolok/jlc-eda-research. Strict validation cannot be skipped.'
+            exit 1
+          fi
+
+      - name: Resolve immutable harness contract
+        id: pin
+        run: python3 JLC/verify_harness_pin.py --github-output "$GITHUB_OUTPUT"
+
+      - name: Checkout exact pinned harness
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: lcolok/jlc-eda-research
+          ref: ${{ steps.pin.outputs.commit }}
+          token: ${{ secrets.JLC_HARNESS_READ_TOKEN }}
+          persist-credentials: false
+          path: harness
+
+      - name: Set up Go from pinned harness
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6, Node 24
+        with:
+          go-version-file: harness/jlc/go.mod
+          cache-dependency-path: harness/jlc/go.sum
+
+      - name: Validate authored flow with production Go loader
+        working-directory: harness/jlc
+        run: |
+          go build -o "$RUNNER_TEMP/jlc" .
+          "$RUNNER_TEMP/jlc" flow validate --board "$GITHUB_WORKSPACE/JLC/rev-a" --flow migrate | tee "$RUNNER_TEMP/flow-validation.txt"
+          printf '%s\n' "${{ github.sha }}" > "$RUNNER_TEMP/validated-source-sha.txt"
+          git rev-parse HEAD > "$RUNNER_TEMP/validated-harness-sha.txt"
+
+      - name: Publish strict validation evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: SPINC-JLC-Rev-A-Flow-Validation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flow-validation.txt
+            ${{ runner.temp }}/validated-source-sha.txt
+            ${{ runner.temp }}/validated-harness-sha.txt
+          if-no-files-found: error
+          retention-days: 90
+
+  production-source-gate:
+    if: always()
+    needs: [verify-reproduction-baseline, validate-pinned-flow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require both source and strict flow validation
+        env:
+          SOURCE_RESULT: ${{ needs.verify-reproduction-baseline.result }}
+          FLOW_RESULT: ${{ needs.validate-pinned-flow.result }}
+        run: |
+          test "$SOURCE_RESULT" = success
+          test "$FLOW_RESULT" = success
+          echo 'Source gate passed. This is not manufacturing or physical Golden approval.'
