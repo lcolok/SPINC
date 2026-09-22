@@ -1,0 +1,4 @@
+# Python verification runs must not pollute the source checkout.
+__pycache__/
+*.py[cod]
+.DS_Store

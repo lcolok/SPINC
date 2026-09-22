@@ -18,6 +18,8 @@ The runtime executor is the Go-based Flow Harness in `lcolok/jlc-eda-research`. 
 - `JLC/rev-a/board-id`
 - `JLC/rev-a/flows/migrate.yaml`
 
+For the maker-facing path from files to a physical charger, use `JLC/REPLICATION_RUNBOOK.md`. `JLC/reproduction-kit.json` is the machine-checkable whole-device inventory, and `JLC/verify_reproduction_kit.py` fails closed on missing/drifted Rev A assets. Golden Rev A firmware inputs and expected artifacts are separately frozen by `Platformio/firmware-build-contract.json`; `Platformio/golden_build.py` is the governed build entrypoint.
+
 There is deliberately **no shell orchestration SSoT**. The old `run_rev_a_harness.sh` bootstrap prototype has been removed.
 
 ## Rev A manufacturing profile
@@ -103,20 +105,21 @@ The authored flow is `JLC/rev-a/flows/migrate.yaml`. It contains fine-grained fa
 3. required native CPL capability preflight
 4. deterministic KiCad migration-bundle creation
 5. JLCEDA Web-first runtime bootstrap
-6. fail-closed KiCad external import
-7. PCB activation
-8. JLCEDA PCB DRC
-9. JLC BOM export with identity-drift verification
-10. native JLCEDA CPL export
-11. Gerber export
-12. `.epro2` project export
-13. BOM/CPL round-trip against the frozen KiCad production data
+6. unique-client routing gate before any non-idempotent import
+7. fail-closed KiCad external import
+8. PCB activation
+9. JLCEDA PCB DRC
+10. JLC BOM export with identity-drift verification
+11. native JLCEDA CPL export
+12. Gerber export
+13. `.epro2` project export
+14. BOM/CPL round-trip against the frozen KiCad production data
 
 The Go flow engine records stage events, stdout/stderr/exit code evidence, gate verdicts, and SHA-256 for declared output files in its state store. SPINC therefore does not maintain its own phase/log/evidence orchestration code.
 
 ### Safe recovery after a later-stage failure
 
-`import-external` creates a new JLCEDA project and is intentionally non-idempotent. Do not replay it just because a later DRC/export gate failed.
+`unique-client-route` runs `jlc project info` before `import-external` and fails closed when multiple EDA clients make routing ambiguous. `import-external` creates a new JLCEDA project and is intentionally non-idempotent. Do not replay it just because a later DRC/export gate failed.
 
 The shared Go harness supports an explicit restart point:
 

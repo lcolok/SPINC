@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "name": "SPINC Golden Rev A reproduction kit",
+  "intent": "A maker-facing, machine-checkable inventory for faithfully reproducing the upstream SPINC before any Rev B redesign.",
+  "upstream": {
+    "repository": "CoretechR/SPINC",
+    "commit": "af7b36e8ca5e99bfb3e99d8b02d9864117091de7"
+  },
+  "contracts": {
+    "baseline": "JLC/rev-a-baseline.json",
+    "bindingManifest": "JLC/jlc-bindings.json"
+  },
+  "pcb": {
+    "quantity": 1,
+    "schematic": "PCB/SPINC AA Charger/SPINC AA Charger.kicad_sch",
+    "board": "PCB/SPINC AA Charger/SPINC AA Charger.kicad_pcb",
+    "productionBom": "PCB/SPINC AA Charger/production/bom.csv",
+    "productionPositions": "PCB/SPINC AA Charger/production/positions.csv",
+    "productionNetlist": "PCB/SPINC AA Charger/production/netlist.ipc",
+    "expectedPopulatedDesignators": 91,
+    "expectedUniqueLcscParts": 44,
+    "dnpReferences": ["TH3"]
+  },
+  "mechanical": {
+    "directory": "CAD",
+    "strictStlInventory": true,
+    "files": [
+      "CAD/Arm.stl",
+      "CAD/Button.stl",
+      "CAD/Connector Pin.stl",
+      "CAD/Frontpanel.stl",
+      "CAD/Shell L.stl",
+      "CAD/Shell R.stl"
+    ],
+    "sha256": {
+      "CAD/Arm.stl": "96348c3863c84da437063a4a60e8bf737babb3323fa7b3d0ef856a3707f92e55",
+      "CAD/Button.stl": "2f6957107e95b94508dbed1e7fcc8e75138548d0b92b17b19ab22a6ccfaeef99",
+      "CAD/Connector Pin.stl": "1415a12f1d68097a17ec0297ade78670c5ac5e060c68b97723d81a50ed91d682",
+      "CAD/Frontpanel.stl": "f33a5dba41bf151a24875b5ff86945938cea4efa90ff25c637b5f0423b27ea1d",
+      "CAD/Shell L.stl": "d2e3ce3fe32c0bd4b2e15ffd22ec449194b44612d2ec3717339d1025f0929ce2",
+      "CAD/Shell R.stl": "048df6a13ad596542bc3cc9a8df26fcdff29d9c83d6f0e2efe9f226f7021b1d1"
+    }
+  },
+  "firmware": {
+    "project": "Platformio",
+    "environment": "pico",
+    "config": "Platformio/platformio.ini",
+    "entrypoint": "Platformio/src/main.cpp",
+    "fontAsset": "Platformio/src/rubik_140.c",
+    "contract": "Platformio/firmware-build-contract.json",
+    "buildCommand": ["python3", "Platformio/golden_build.py"],
+    "remoteBuildCommand": ["pio", "run", "-d", "Platformio", "-e", "pico"],
+    "expectedUf2Sha256": "6905ba48aef5f30200ffb5410479c6ae76df5fafdd5af96af157f2a81aef222e",
+    "flash": {
+      "method": "rp2040-bootsel-mass-storage-uf2",
+      "artifact": "pico-firmware.uf2",
+      "artifactSha256": "6905ba48aef5f30200ffb5410479c6ae76df5fafdd5af96af157f2a81aef222e",
+      "qualification": "physical-step-not-performed-by-aid-build"
+    },
+    "bootEntry": {
+      "button": "SW2",
+      "buttonGroundPin": "1",
+      "buttonSignalPin": "2",
+      "seriesResistor": "R2",
+      "seriesResistance": "1k",
+      "mcuSignal": "QSPI_CS",
+      "evidence": "PCB/SPINC AA Charger/production/netlist.ipc"
+    }
+  },
+  "offboardParts": [
+    {
+      "id": "display",
+      "quantity": 1,
+      "manufacturer": "Sharp",
+      "mpn": "LS027B7DH01A",
+      "description": "2.7-inch Sharp Memory LCD"
+    },
+    {
+      "id": "servo",
+      "quantity": 1,
+      "manufacturer": "EMAX",
+      "mpn": "ES08A",
+      "description": "Micro servo"
+    },
+    {
+      "id": "m3x5-screw",
+      "quantity": 2,
+      "spec": "M3x5",
+      "description": "Mechanical assembly screw"
+    }
+  ],
+  "sourceEvidence": [
+    {
+      "kind": "upstream-components",
+      "url": "https://hackaday.io/project/199178/components",
+      "checked": "2026-09-22"
+    },
+    {
+      "kind": "upstream-hardware-log",
+      "url": "https://hackaday.io/project/199178-spinc-diy-automatic-nimh-charger/log/234328-hardware",
+      "checked": "2026-09-22"
+    },
+    {
+      "kind": "upstream-electronics-log",
+      "url": "https://hackaday.io/project/199178-spinc-diy-automatic-nimh-charger/log/234329-electronics",
+      "checked": "2026-09-22"
+    }
+  ],
+  "physicalGoldenGates": [
+    "usb-programming",
+    "rp2040-clock-flash-boot",
+    "power-rails",
+    "display",
+    "vcnl4040",
+    "battery-voltage-sensing",
+    "thermistor-sensing",
+    "polarity-correction",
+    "ds2712-precharge",
+    "ds2712-fast-charge",
+    "ds2712-termination",
+    "servo-mechanics",
+    "enclosure-battery-path-fit"
+  ]
+}

@@ -54,6 +54,21 @@ stages:
     evidence: [exit_code, stdout, stderr]
     on_fail: stop
 
+  - id: unique-client-route
+    title: "Require one unambiguous JLCEDA client before non-idempotent import"
+    action: "jlc project info"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    note: >-
+      Fail closed when multiple JLCEDA clients/windows are connected. Close or
+      disconnect unrelated clients, then resume from this gate. This proves only
+      that routing is unambiguous; it does not authorize the sole client's cloud
+      team/workspace. The operator must confirm that target before starting a live
+      flow. Do not solve routing ambiguity by replaying import-kicad or hard-coding
+      an unrelated source project as an anchor.
+    on_fail: stop
+
   - id: import-kicad
     title: "Import the protected KiCad bundle as a new JLCEDA project"
     action: "jlc project import-external JLC/out/SPINC-JLC-Rev-A-KiCad.zip --file-type KiCad --name SPINC-JLC-Rev-A --switch=true"
@@ -62,8 +77,10 @@ stages:
     evidence: [exit_code, stdout, stderr]
     note: >-
       This is intentionally non-idempotent because import-external creates a new
-      project. After a later-stage failure, continue from that failed stage rather
-      than rerunning this import stage.
+      project. The 2026-09-22 failed run stopped before project creation while
+      initializing the import buffer due to ambiguous multi-client routing.
+      After a later-stage failure, continue from that failed stage rather than
+      rerunning this import stage.
     on_fail: stop
 
   - id: activate-pcb

@@ -50,6 +50,21 @@ class HarnessPinTests(unittest.TestCase):
                 validate_pin(pin)
 
 
+class FlowSafetyTests(unittest.TestCase):
+    def test_unique_client_gate_precedes_non_idempotent_import(self):
+        text = (ROOT / "JLC/rev-a/flows/migrate.yaml").read_text(encoding="utf-8")
+        route = text.index("- id: unique-client-route")
+        imported = text.index("- id: import-kicad")
+        self.assertLess(route, imported)
+        self.assertIn('action: "jlc project info"', text[route:imported])
+        self.assertIn("multiple JLCEDA clients/windows", text[route:imported])
+
+    def test_import_remains_explicitly_non_idempotent(self):
+        text = (ROOT / "JLC/rev-a/flows/migrate.yaml").read_text(encoding="utf-8")
+        imported = text.index("- id: import-kicad")
+        self.assertIn("intentionally non-idempotent", text[imported:])
+
+
 class BundleProvenanceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -76,6 +91,13 @@ class BundleProvenanceTests(unittest.TestCase):
 
     def test_dirty_tracked_source_fails_closed(self):
         (self.root / "source").write_text("changed\n")
+        with patch.object(bundle, "ROOT", self.root), self.assertRaises(SystemExit):
+            bundle.git_head()
+
+    def test_staged_change_with_restored_worktree_is_not_clean(self):
+        (self.root / "source").write_text("staged change\n")
+        self.git("add", "source")
+        (self.root / "source").write_text("source\n")
         with patch.object(bundle, "ROOT", self.root), self.assertRaises(SystemExit):
             bundle.git_head()
 
@@ -126,6 +148,53 @@ class BundleBuildTests(unittest.TestCase):
         (self.source / bundle.CORE[0]).unlink()
         with self.assertRaises(SystemExit):
             bundle.build(self.root / "rejected.zip")
+
+    def test_output_cannot_overwrite_source(self):
+        source = self.source / bundle.CORE[0]
+        before = source.read_bytes()
+        with self.assertRaisesRegex(SystemExit, "output"):
+            bundle.build(source)
+        self.assertEqual(source.read_bytes(), before)
+
+    def test_output_cannot_overwrite_git_metadata(self):
+        config = self.root / ".git/config"
+        before = config.read_bytes()
+        with self.assertRaisesRegex(SystemExit, "output"):
+            bundle.build(config)
+        self.assertEqual(config.read_bytes(), before)
+
+    def test_output_symlink_cannot_overwrite_unrelated_file(self):
+        target = self.root / "notes.txt"
+        target.write_text("user asset")
+        output = self.root / "linked.zip"
+        output.symlink_to(target)
+        with self.assertRaisesRegex(SystemExit, "output"):
+            bundle.build(output)
+        self.assertEqual(target.read_text(), "user asset")
+
+    def test_failed_zip_write_preserves_previous_output(self):
+        output = self.root / "previous.zip"
+        output.write_bytes(b"previous archive")
+        with patch.object(zipfile.ZipFile, "writestr", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                bundle.build(output)
+        self.assertEqual(output.read_bytes(), b"previous archive")
+        self.assertEqual(list(self.root.glob(".previous.zip.*.tmp")), [])
+
+    def test_guard_time_source_change_is_not_bound_to_old_commit(self):
+        source = self.source / bundle.CORE[0]
+        with patch.object(bundle, "run_reproduction_guardrails", side_effect=lambda: source.write_text("changed after preflight")):
+            with self.assertRaises(SystemExit):
+                bundle.build(self.root / "changed.zip")
+        self.assertFalse((self.root / "changed.zip").exists())
+
+    def test_assume_unchanged_cannot_hide_payload_drift(self):
+        source = self.source / bundle.CORE[0]
+        subprocess.run(["git", "-C", str(self.root), "update-index", "--assume-unchanged", str(source.relative_to(self.root))], check=True)
+        source.write_text("hidden local drift")
+        with self.assertRaises(SystemExit):
+            bundle.build(self.root / "hidden.zip")
+        self.assertFalse((self.root / "hidden.zip").exists())
 
 
 if __name__ == "__main__":

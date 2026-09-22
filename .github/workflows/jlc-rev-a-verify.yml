@@ -43,6 +43,8 @@ jobs:
           test "$(cat JLC/rev-a/board-id)" = "spinc-jlc-rev-a"
           test -s JLC/rev-a/flows/migrate.yaml
           python JLC/verify_jlc_export.py --self-test
+          python Platformio/verify_firmware_contract.py | tee JLC/out/firmware-contract.txt
+          python -m unittest discover -s Platformio -p 'test_*.py' -v 2>&1 | tee JLC/out/firmware-contract-tests.txt
           python -m unittest discover -s JLC -p 'test_*.py' -v 2>&1 | tee JLC/out/governance-tests.txt
           node --check JLC/jlceda-scripts/import-rev-a-kicad.js
           node --check JLC/jlceda-scripts/audit-jlc-library-bindings.js
@@ -84,7 +86,9 @@ jobs:
           }
           Path('JLC/out/source-provenance.json').write_text(json.dumps(evidence, indent=2) + '\n')
           PY
-          (cd JLC/out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          sums_tmp="$RUNNER_TEMP/SPINC-JLC-SHA256SUMS"
+          (cd JLC/out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum) > "$sums_tmp"
+          mv "$sums_tmp" JLC/out/SHA256SUMS
 
       - name: Publish migration bundle
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
