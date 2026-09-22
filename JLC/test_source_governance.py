@@ -73,6 +73,11 @@ class BundleProvenanceTests(unittest.TestCase):
         self.git("init", "-q")
         self.git("config", "user.email", "fixture@example.invalid")
         self.git("config", "user.name", "Test Fixture")
+        # GitHub-hosted Linux runners may have automatic maintenance enabled.
+        # Disable it in synthetic repositories so a background pack cannot race
+        # TemporaryDirectory cleanup after a test has already passed.
+        self.git("config", "gc.auto", "0")
+        self.git("config", "maintenance.auto", "false")
         (self.root / "source").write_text("source\n")
         self.git("add", "source")
         self.git("commit", "-qm", "fixture")
@@ -120,7 +125,8 @@ class BundleBuildTests(unittest.TestCase):
         lib.mkdir()
         (lib / "fixture.kicad_sym").write_text("fixture symbol")
         for args in (("init", "-q"), ("config", "user.email", "fixture@example.invalid"),
-                     ("config", "user.name", "Test Fixture"), ("add", "."),
+                     ("config", "user.name", "Test Fixture"), ("config", "gc.auto", "0"),
+                     ("config", "maintenance.auto", "false"), ("add", "."),
                      ("commit", "-qm", "fixture")):
             subprocess.run(["git", "-C", str(self.root), *args], check=True)
         self.addCleanup(patch.stopall)
