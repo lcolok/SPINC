@@ -208,15 +208,26 @@ stages:
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
-  - id: roundtrip
-    title: "Round-trip migrated BOM/CPL against Golden KiCad production data"
+  - id: order-package
+    title: "Assemble the JLCPCB order package only if the migration is proven"
     action: >-
-      python3 JLC/verify_jlc_export.py
-      --bom JLC/out/SPINC-JLC-Rev-A-BOM.csv
-      --cpl JLC/out/SPINC-JLC-Rev-A-CPL.csv
-      --report JLC/out/SPINC-JLC-Rev-A-roundtrip.json
+      python3 JLC/verify_order_package.py
+      --jlc-bom JLC/out/SPINC-JLC-Rev-A-BOM.csv
+      --jlc-cpl JLC/out/SPINC-JLC-Rev-A-CPL.csv
+      --gerber JLC/out/SPINC-JLC-Rev-A-Gerber.zip
+      --gerber-report JLC/out/SPINC-JLC-Rev-A-gerber-equivalence.json
+      --out JLC/out/order
     gate:
       exit_code: 0
-      file_exists: "JLC/out/SPINC-JLC-Rev-A-roundtrip.json"
+      file_exists: "JLC/out/order/ORDER-MANIFEST.json"
     evidence: [exit_code, stdout, stderr, file_hash]
+    note: >-
+      JLCEDA carries no LCSC numbers through a KiCad import and exports raw
+      footprint origins, so the order uses the equivalence-released Gerber plus
+      the frozen upstream bom.csv/positions.csv byte-identical. The JLC BOM/CPL
+      must match them except for the exact differences declared in
+      JLC/rev-a/order-deltas.json. Placement rotations/offsets still need the
+      JLCPCB assembly preview review before payment. The former roundtrip
+      stage assumed LCSC-bound JLCEDA devices and is retained as
+      JLC/verify_jlc_export.py for that future path.
     on_fail: stop
