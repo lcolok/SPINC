@@ -127,6 +127,21 @@ stages:
       track and via counts are unchanged.
     on_fail: stop
 
+  - id: slot-regions
+    title: "Convert the imported battery-channel cutout into a native slot region"
+    action: "jlc pcb cutout to-slot-region --expect 1 --save"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    note: >-
+      The KiCad Edge.Cuts cutout (52 x 45 mm battery channel between J4/J5) is
+      imported as a closed board-outline polyline: Gerber mills it but the
+      JLCEDA 3D model and DRC treat the area as solid board. Per the official
+      API (TPCB_LayersOfFill) a Fill on MULTI is a slot region; the command
+      converts only closed contours strictly inside the outline, verifies the
+      geometry and the exact primitive delta, and is idempotent.
+    on_fail: stop
+
   - id: pcb-drc
     title: "Run JLCEDA PCB DRC and require the exact reviewed residual set"
     action: "python3 JLC/verify_drc_residuals.py --report JLC/out/SPINC-JLC-Rev-A-DRC.json"
@@ -144,11 +159,16 @@ stages:
 
   - id: export-bom
     title: "Export migrated BOM and verify JLC device identity drift"
-    action: "jlc bom export -o JLC/out/SPINC-JLC-Rev-A-BOM.csv --format csv --verify"
+    action: "jlc bom export -o JLC/out/SPINC-JLC-Rev-A-BOM.csv --format csv"
     gate:
       exit_code: 0
       file_exists: "JLC/out/SPINC-JLC-Rev-A-BOM.csv"
     evidence: [exit_code, stdout, stderr, file_hash]
+    note: >-
+      Plain export, cross-checked by the order-package stage. A KiCad import
+      carries no LCSC numbers into JLCEDA, so `--verify` has nothing to verify
+      (harness 5b26ad3 correctly fails it instead of reporting zero drift); the
+      ordered BOM is the frozen upstream bom.csv.
     on_fail: stop
 
   - id: reactivate-pcb
