@@ -1,0 +1,73 @@
+{
+  "by_name": {
+    "Clearance Error": 1,
+    "Netlist Error": 1
+  },
+  "pass": false,
+  "raw_items": [
+    {
+      "count": 1,
+      "list": [
+        {
+          "count": 1,
+          "list": [
+            {
+              "errorObjType": "Device to TH Pad",
+              "errorType": "Clearance Error",
+              "layer": "Bottom Layer",
+              "obj1": {
+                "suffix": ": FID2",
+                "typeName": "Device"
+              },
+              "obj2": {
+                "suffix": "(GND): H1_1",
+                "typeName": "TH Pad"
+              },
+              "ruleName": "otherClearance"
+            }
+          ],
+          "name": "Device to TH Pad",
+          "title": [
+            "Device",
+            "to",
+            "TH Pad",
+            "(1)"
+          ],
+          "visible": true
+        }
+      ],
+      "name": "Clearance Error"
+    },
+    {
+      "count": 1,
+      "list": [
+        {
+          "count": 1,
+          "list": [
+            {
+              "errorObjType": "Netlist Error",
+              "errorType": "Netlist Error",
+              "obj1": {
+                "suffix": "",
+                "typeName": "Schematic Netlist"
+              },
+              "obj2": {
+                "suffix": "",
+                "typeName": "PCB Netlist"
+              },
+              "ruleName": "Import Changes"
+            }
+          ],
+          "name": "Netlist Error",
+          "title": [
+            "Netlist Error",
+            "(1)"
+          ],
+          "visible": true
+        }
+      ],
+      "name": "Netlist Error"
+    }
+  ],
+  "total": 2
+}

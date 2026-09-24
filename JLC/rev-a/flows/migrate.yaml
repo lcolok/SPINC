@@ -128,11 +128,18 @@ stages:
     on_fail: stop
 
   - id: pcb-drc
-    title: "Run JLCEDA PCB DRC"
-    action: "jlc pcb drc"
+    title: "Run JLCEDA PCB DRC and require the exact reviewed residual set"
+    action: "python3 JLC/verify_drc_residuals.py --report JLC/out/SPINC-JLC-Rev-A-DRC.json"
     gate:
       exit_code: 0
-    evidence: [exit_code, stdout, stderr]
+      file_exists: "JLC/out/SPINC-JLC-Rev-A-DRC.json"
+    evidence: [exit_code, stdout, stderr, file_hash]
+    note: >-
+      Passes only if the live `jlc pcb drc --json` violation multiset equals
+      JLC/rev-a/drc-residuals.json (2 reviewed items: FID2 component outline to
+      H1 pad, copper gap 1.043 mm; R1 intentionally off-board in the frozen
+      schematic, proven by the live schematic/PCB component difference). Any
+      extra, missing or changed violation exits 5.
     on_fail: stop
 
   - id: export-bom
