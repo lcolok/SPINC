@@ -100,6 +100,8 @@ shasum -a 256 -c SHA256SUMS
 
 ## 6. 固定 loader 的独立只读验证
 
+> 2026-09-24 起 pin 为 harness `38af06ef5b35a6193fd1726c9aaca3076cbcb090`。源码 CI 不再读取私有仓，而是按 `harness-pin.json` 的 `binary.sha256` 下载本仓 release `harness-jlc-38af06ef5b35` 中的可复现 `linux/amd64` 二进制（构建见 `MAIN_ADMIN_HANDOVER.md` §1）。下文 `197c8ee` 内容为历史记录。
+
 普通本机入口只验证 pin 的数据契约，不自动取私有仓库或构建 loader。以下命令是在已经核实来源、完整 commit 和干净状态的隔离 worktree 中执行的：
 
 ```sh
@@ -122,7 +124,7 @@ go build -o "$SPINC_ROOT/JLC/out/jlc-pinned-197c8ee" .
 
 SPINC 的 PR #1 仍为 Draft。已核验的工作流运行 `34223213368` 中，复刻源检查通过；私有仓库授权步骤失败，`validate-pinned-flow` 和汇总 `production-source-gate` 保持失败。
 
-需要维护者按 `MAIN_ADMIN_HANDOVER.md` 处理限定范围的 `JLC_HARNESS_READ_TOKEN`、实际 main 保护、最终候选 CI、配套消费者 PR 审查和持久制品归档。此次不创建/修改 secret、不修改保护规则、不重跑远程工作流、不合并。
+需要维护者按 `MAIN_ADMIN_HANDOVER.md` §1 构建并发布固定 harness 的可复现二进制、回填 `binary.sha256`（不再需要任何跨仓 token），以及处理实际 main 保护、最终候选 CI、配套消费者 PR 审查和持久制品归档。此次不创建/修改 secret、不修改保护规则、不重跑远程工作流、不合并。
 
 源治理通过不等于制造放行，更不等于实物 Golden。真实 JLCEDA 导入、库/封装关联、ERC/DRC、Gerber/DFM、实际 BOM/CPL 往返以及实物充电/机构验收仍是独立边界。旧实验工作树已与配套候选 c8e53fc 逐文件对账：10 个文件不同，另外 6 个文件在候选中不存在；均原样保留。内容不同不等于全部缺失的功能，也不等于可安全删除，不应直接挪进生产候选。
 

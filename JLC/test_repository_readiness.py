@@ -26,7 +26,10 @@ def valid_snapshot():
                   "required_status_checks": {"strict": True, "checks": [{"context": readiness.GATE, "app_id": 123}]}}
     return {"repository": readiness.REPOSITORY, "local": {"commit": head, "status": ""},
             "pr": pr, "pr_end": copy.deepcopy(pr), "main": main, "main_end": copy.deepcopy(main),
-            "reader_present": True, "protection": protection, "rulesets": [], "errors": [],
+            "harness_binary": {"tag": "harness-jlc-" + "d" * 12, "release_tag": "harness-jlc-" + "d" * 12,
+                               "draft": False, "expected_sha256": "e" * 64,
+                               "assets": [{"name": "jlc-linux-amd64", "state": "uploaded", "digest": "sha256:" + "e" * 64}]},
+            "protection": protection, "rulesets": [], "errors": [],
             "runs": [run], "run_end": copy.deepcopy(run),
             "jobs": [{"id": i, "name": name, "run_id": 42, "run_attempt": 1,
                       "status": "completed", "conclusion": "success"} for i, name in enumerate(sorted(readiness.JOBS))],
@@ -47,9 +50,30 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 0)
         self.assertEqual(result["result"], "automated-gates-pass-human-approval-still-required")
 
-    def test_missing_reader(self):
-        self.snapshot["reader_present"] = False
-        self.blocked("missing-private-harness-reader")
+    def test_missing_binary_release_is_blocked(self):
+        self.snapshot["harness_binary"]["release_tag"] = None
+        self.snapshot["harness_binary"]["assets"] = []
+        self.blocked("pinned-harness-binary-not-published")
+
+    def test_draft_binary_release_is_blocked(self):
+        self.snapshot["harness_binary"]["draft"] = True
+        self.blocked("pinned-harness-binary-not-published")
+
+    def test_binary_digest_mismatch_is_blocked(self):
+        self.snapshot["harness_binary"]["assets"][0]["digest"] = "sha256:" + "f" * 64
+        self.blocked("pinned-harness-binary-digest-mismatch")
+
+    def test_duplicate_or_incomplete_binary_asset_is_blocked(self):
+        asset = self.snapshot["harness_binary"]["assets"][0]
+        for assets in ([asset, dict(asset)], [dict(asset, state="starter")]):
+            with self.subTest(assets=assets):
+                snapshot = valid_snapshot()
+                snapshot["harness_binary"]["assets"] = assets
+                self.assertIn("pinned-harness-binary-not-published", readiness.evaluate(snapshot)["blockers"])
+
+    def test_unreported_binary_digest_is_unknown_not_pass(self):
+        self.snapshot["harness_binary"]["assets"][0]["digest"] = None
+        self.assertEqual(readiness.evaluate(self.snapshot)["exit_code"], 2)
 
     def test_draft_stays_blocked(self):
         self.snapshot["pr"]["draft"] = self.snapshot["pr_end"]["draft"] = True

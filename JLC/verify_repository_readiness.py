@@ -14,13 +14,13 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from verify_harness_pin import BINARY_ASSET, validate_pin
 from verify_local import ROOT, digest, save_report, source_identity
 
 REPOSITORY = "lcolok/SPINC"
 WORKFLOW = ".github/workflows/jlc-rev-a-verify.yml"
 GATE = "production-source-gate"
 JOBS = {"verify-reproduction-baseline", "validate-pinned-flow", GATE}
-SECRET = "JLC_HARNESS_READ_TOKEN"
 
 
 class ReadError(RuntimeError):
@@ -62,8 +62,17 @@ def collect(pr_number: int) -> dict:
     observe("local", lambda: source_identity(ROOT))
     observe("main", lambda: read_api("branches/main"))
     observe("pr", lambda: read_api(f"pulls/{pr_number}"))
-    # Store only the required name's presence, not all secret metadata.
-    observe("reader_present", lambda: any(item["name"] == SECRET for page in read_api("actions/secrets?per_page=100", paginate=True) for item in page["secrets"]))
+    # The pinned harness binary must be published at the release the pin names;
+    # keep only the fields the policy needs (asset name, state, server digest).
+    def harness_binary():
+        pin = validate_pin(json.loads((ROOT / "JLC/harness-pin.json").read_text(encoding="utf-8")))
+        release = read_api(f"releases/tags/{pin['binary_tag']}")
+        return {"tag": pin["binary_tag"], "expected_sha256": pin["binary_sha256"],
+                "release_tag": release.get("tag_name"), "draft": release.get("draft"),
+                "assets": [{key: asset.get(key) for key in ("name", "state", "digest")}
+                           for asset in release.get("assets", [])]}
+
+    observe("harness_binary", harness_binary)
 
     def protection():
         try:
@@ -114,7 +123,14 @@ def evaluate(snapshot: dict) -> dict:
         require(local["commit"] == pr["head"]["sha"], "local-head-does-not-match-pr")
         require(not local["status"], "unpublished-local-changes")
         require(pr["base"]["sha"] == main["commit"]["sha"], "pr-base-is-stale")
-        require(snapshot["reader_present"] is True, "missing-private-harness-reader")
+        binary = snapshot["harness_binary"]
+        require(binary["release_tag"] == binary["tag"] and binary["draft"] is False, "pinned-harness-binary-not-published")
+        assets = [asset for asset in binary["assets"] if asset["name"] == BINARY_ASSET]
+        require(len(assets) == 1 and assets[0]["state"] == "uploaded", "pinned-harness-binary-not-published")
+        if len(assets) == 1 and assets[0]["digest"] is None:
+            unknown.append("release asset digest not reported by GitHub")
+        elif len(assets) == 1:
+            require(assets[0]["digest"] == "sha256:" + binary["expected_sha256"], "pinned-harness-binary-digest-mismatch")
         if pr["mergeable"] is None:
             unknown.append("GitHub mergeability is still computing")
         else:

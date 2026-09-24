@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -20,6 +21,7 @@ class HarnessPinTests(unittest.TestCase):
 
     def test_committed_pin(self):
         self.assertEqual(validate_pin(self.pin)["commit"], self.pin["commit"])
+        self.assertRegex(self.pin["binary"]["sha256"], r"^[0-9a-f]{64}$")
 
     def test_reject_wrong_repository(self):
         self.pin["repository"] = "someone/other"
@@ -43,11 +45,51 @@ class HarnessPinTests(unittest.TestCase):
 
     def test_reject_wrong_flow_or_schema(self):
         for key, value in (("flowSpec", "../other.yaml"), ("schema", True),
-                           ("schema", 2), ("validationEntryPoint", "jlc flow run")):
+                           ("schema", 1), ("schema", 3), ("validationEntryPoint", "jlc flow run")):
             pin = copy.deepcopy(self.pin)
             pin[key] = value
             with self.assertRaises(ValueError):
                 validate_pin(pin)
+
+
+    def test_binary_anchor_is_bound_to_commit_and_recipe(self):
+        pin = copy.deepcopy(self.pin)
+        if not re.fullmatch(r"[0-9a-f]{64}", str(pin["binary"].get("sha256"))):
+            pin["binary"]["sha256"] = "e" * 64  # committed value may still be PENDING
+        result = validate_pin(pin)
+        tag = "harness-jlc-" + pin["commit"][:12]
+        self.assertEqual(result["binary_tag"], tag)
+        self.assertEqual(result["binary_url"],
+                         f"https://github.com/lcolok/SPINC/releases/download/{tag}/jlc-linux-amd64")
+        bad = [("sha256", "PENDING"), ("sha256", "E" * 64), ("sha256", "e" * 63),
+               ("sha256", "e" * 64 + "\ninjected=yes"), ("releaseTag", "harness-jlc-000000000000"),
+               ("asset", "jlc-darwin-arm64"), ("platform", "darwin/arm64"),
+               ("builder", ".github/workflows/other.yml")]
+        for key, value in bad:
+            with self.subTest(key=key, value=value):
+                broken = copy.deepcopy(pin)
+                broken["binary"][key] = value
+                with self.assertRaises(ValueError):
+                    validate_pin(broken)
+        for key, value in (("go", "1.25"), ("go", "latest"), ("command", "go build ."),
+                           ("env", "CGO_ENABLED=1 GOOS=linux GOARCH=amd64"), ("workdir", ".")):
+            with self.subTest(recipe=key, value=value):
+                broken = copy.deepcopy(pin)
+                broken["binary"]["recipe"][key] = value
+                with self.assertRaises(ValueError):
+                    validate_pin(broken)
+        for binary in (None, [], {}):
+            broken = copy.deepcopy(pin)
+            broken["binary"] = binary
+            with self.assertRaises(ValueError):
+                validate_pin(broken)
+
+    def test_binary_anchor_must_be_filled_before_ci(self):
+        # Fail-closed: the placeholder is never an executable anchor.
+        pin = copy.deepcopy(self.pin)
+        pin["binary"]["sha256"] = "PENDING-fill-from-jlc-harness-binary-run"
+        with self.assertRaises(ValueError):
+            validate_pin(pin)
 
 
 class FlowSafetyTests(unittest.TestCase):

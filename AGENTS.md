@@ -63,7 +63,9 @@ Golden-board acceptance. Local loader compatibility is not the GitHub required
 No real `flow run`, imports, project replacement, live board edits, service
 restarts, manufacturing orders, secret changes, commits, pushes, merges or
 branch deletion without explicit task authorization. Import is non-idempotent.
-Do not copy private harness code/credentials into this public repository.
+Do not copy private harness code/credentials into this public repository. The
+only harness material published here is the hash-pinned reproducible binary
+release named by `JLC/harness-pin.json` (`binary`).
 
 The historical `_worktrees/jlc-spinc-20260831` has independent pre-existing
 uncommitted assets. Do not clean, overwrite or fold them into this repository

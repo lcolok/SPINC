@@ -5,34 +5,57 @@ in another repository, nor a locally downloaded ZIP satisfies the missing
 SPINC required check or creates branch protection. **Do not merge, enable
 auto-merge, rewrite main, or start live JLCEDA as part of these steps.**
 
-## 1. Connect the existing strict-validation job
+## 1. Publish the pinned harness binary (no CI credential)
 
-Use an administrator-controlled GitHub session. Create a fine-grained token
-limited to `lcolok/jlc-eda-research`, with **Contents: read-only** and an expiry.
-Do not use a broad administration token as the CI reader. Do not paste the
-reader into chat, an issue, PR, shell history, or a tracked file.
+`validate-pinned-flow` needs no secret. It downloads the exact reproducible
+`linux/amd64` build of the pinned harness commit from this repository's
+release and fails closed unless its SHA-256 equals `binary.sha256` in
+`JLC/harness-pin.json`. The harness **source** stays private; only the built
+executable is public. Do not create `JLC_HARNESS_READ_TOKEN`; delete it if an
+older procedure created one.
 
-Store it using the SPINC Actions repository secret UI, or the official CLI's
-interactive input (the value is not a command-line argument):
+Once per harness pin (`<commit>` = full pin SHA, `<tag>` = `binary.releaseTag`):
 
-```sh
-gh secret set JLC_HARNESS_READ_TOKEN --repo lcolok/SPINC
-```
+1. In `lcolok/jlc-eda-research`, run the builder on the exact commit. It builds
+   twice with independent caches, requires byte equality, smoke-tests the bytes
+   against the public SPINC flow including a negative control, and records the
+   recipe and checksum:
 
-The job consumes exactly that name. Secret presence is not proof of access:
-a complete new `validate-pinned-flow` run must resolve the source pin, check
-out the private repository at that full SHA, build it and validate this PR's
-actual source. Rerun the latest source workflow identified in PR #1, not the
-historical #45/#47 runs after the head changes. Run the whole workflow so the
-aggregate gate is recomputed.
+   ```sh
+   gh workflow run jlc-harness-binary.yml --repo lcolok/jlc-eda-research \
+     -f commit=<commit> -f go-version=<binary.recipe.go>
+   gh run watch --repo lcolok/jlc-eda-research --exit-status <run-id>
+   gh run download <run-id> --repo lcolok/jlc-eda-research \
+     --name jlc-<commit>-linux-amd64 --dir /tmp/jlc-<commit>
+   (cd /tmp/jlc-<commit> && sha256sum -c SHA256SUMS && cat jlc-harness-binary.json)
+   ```
 
-This is a public repository. Only trusted, reviewed code may run with access
-to the private checkout. A Contents-only credential still grants access to
-private source. Never use `pull_request_target`, copy the private repository
-into public artifacts, or send secrets to a fork to make a check pass.
-Environment-based approvals are a possible later hardening step but require
-both an explicitly configured protected environment and a workflow change;
-merely creating an environment or an environment-scoped secret is insufficient.
+2. Confirm `jlc-harness-binary.json` names `<commit>` and the pinned recipe,
+   then publish the bytes as a release of this repository:
+
+   ```sh
+   gh release create <tag> --repo lcolok/SPINC --target jlc-rev-a \
+     --title "jlc harness <commit>" \
+     --notes-file /tmp/jlc-<commit>/jlc-harness-binary.json \
+     /tmp/jlc-<commit>/jlc-linux-amd64 /tmp/jlc-<commit>/jlc-harness-binary.json
+   gh api repos/lcolok/SPINC/releases/tags/<tag> \
+     -q '.assets[] | select(.name=="jlc-linux-amd64") | .digest'
+   ```
+
+   The reported digest must be `sha256:<the builder's sha256>`. Enabling
+   *immutable releases* for this repository is recommended hardening; the hash
+   anchor already makes a replaced asset fail closed.
+
+3. Commit that SHA-256 into `binary.sha256`. Until then `verify_harness_pin.py`
+   rejects the pin and the source gate stays red by design.
+
+A new harness pin means a new builder run, a new release tag and a new
+`binary.sha256`; never replace assets under an existing tag. Anyone with
+harness read access can re-run the builder or the recorded recipe on the same
+commit and must obtain the same bytes.
+
+Fork PRs run this job too, since no secret is involved. Never use
+`pull_request_target` or send secrets to a fork to make a check pass.
 
 ## 2. Protect main with actual GitHub settings
 

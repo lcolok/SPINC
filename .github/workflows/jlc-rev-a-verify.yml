@@ -122,48 +122,44 @@ jobs:
 
   validate-pinned-flow:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Checkout tested source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
-      - name: Require explicit read access to private harness
-        env:
-          HARNESS_TOKEN: ${{ secrets.JLC_HARNESS_READ_TOKEN }}
-        run: |
-          if [[ -z "$HARNESS_TOKEN" ]]; then
-            echo '::error::Configure JLC_HARNESS_READ_TOKEN with read-only Contents access to lcolok/jlc-eda-research. Strict validation cannot be skipped.'
-            exit 1
-          fi
-
       - name: Resolve immutable harness contract
         id: pin
         run: python3 JLC/verify_harness_pin.py --github-output "$GITHUB_OUTPUT"
 
-      - name: Checkout exact pinned harness
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: lcolok/jlc-eda-research
-          ref: ${{ steps.pin.outputs.commit }}
-          token: ${{ secrets.JLC_HARNESS_READ_TOKEN }}
-          persist-credentials: false
-          path: harness
-
-      - name: Set up Go from pinned harness
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6, Node 24
-        with:
-          go-version-file: harness/jlc/go.mod
-          cache-dependency-path: harness/jlc/go.sum
-
-      - name: Validate authored flow with production Go loader
-        working-directory: harness/jlc
+      # No credential: the private harness is consumed as the exact reproducible
+      # binary of the pinned commit, anchored by SHA-256 in harness-pin.json.
+      # The release location is untrusted; a hash mismatch fails closed.
+      - name: Fetch and verify exact pinned harness binary
+        env:
+          BINARY_URL: ${{ steps.pin.outputs.binary_url }}
+          BINARY_SHA256: ${{ steps.pin.outputs.binary_sha256 }}
         run: |
-          go build -o "$RUNNER_TEMP/jlc" .
+          set -euo pipefail
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --retry 3 --output "$RUNNER_TEMP/jlc" "$BINARY_URL"
+          echo "$BINARY_SHA256  $RUNNER_TEMP/jlc" | sha256sum --check --strict -
+          chmod 0555 "$RUNNER_TEMP/jlc"
+
+      - name: Validate authored flow with pinned production loader
+        run: |
+          set -euo pipefail
           "$RUNNER_TEMP/jlc" flow validate --board "$GITHUB_WORKSPACE/JLC/rev-a" --flow migrate | tee "$RUNNER_TEMP/flow-validation.txt"
+          # Negative control: the same bytes must reject a corrupted flow.
+          cp -R JLC/rev-a "$RUNNER_TEMP/negative"
+          perl -0pi -e 's/- id: /- idx: /' "$RUNNER_TEMP/negative/flows/migrate.yaml"
+          if "$RUNNER_TEMP/jlc" flow validate --board "$RUNNER_TEMP/negative" --flow migrate; then
+            echo '::error::pinned loader accepted a corrupted flow'; exit 1
+          fi
           printf '%s\n' "${{ github.sha }}" > "$RUNNER_TEMP/validated-source-sha.txt"
-          git rev-parse HEAD > "$RUNNER_TEMP/validated-harness-sha.txt"
+          printf '%s\n' "${{ steps.pin.outputs.commit }}" > "$RUNNER_TEMP/validated-harness-sha.txt"
+          sha256sum "$RUNNER_TEMP/jlc" | cut -d' ' -f1 > "$RUNNER_TEMP/validated-harness-binary-sha256.txt"
 
       - name: Publish strict validation evidence
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -173,6 +169,7 @@ jobs:
             ${{ runner.temp }}/flow-validation.txt
             ${{ runner.temp }}/validated-source-sha.txt
             ${{ runner.temp }}/validated-harness-sha.txt
+            ${{ runner.temp }}/validated-harness-binary-sha256.txt
           if-no-files-found: error
           retention-days: 90
 

@@ -64,6 +64,13 @@ flow run 会创建真实 JLCEDA 工程，属于 live action；只能在明确授
 
 2026-09-22 15:30 的真实 flow 证据显示：preflight、bundle、bootstrap 均通过，随后 `import-kicad` 在初始化外部导入缓冲区时因 3 个 client 产生 409。对照 pinned harness `197c8ee` 的调用顺序，失败发生在 `injectExternalImportBytes()`，尚未执行 `probeExternalImportFile()` 或真正创建工程的 `startExternalProjectImport()`；因此该轮**没有创建 SPINC JLCEDA 工程**，安全恢复点是新增的 `unique-client-route`。
 
+2026-09-24 在 Chrome Web 运行时（唯一 client、团队已挂载）实测：
+
+- `import-external --probe-only` 所用的 `extractProjectInfo` **不是可靠预检**：对 KiCad 输入（含 2.6 KB 对照板）一律抛出 `[object Object]`，页面控制台原始错误为 `PARAMETER_VERIFICATION`。它失败不代表真实导入失败，不能据此放弃或改道。
+- 真实导入**直接接受本仓 KiCad 8 bundle**：试探工程 `SPINC-K8Zip-Canary-20260924`（`1e4e32731c474237ac0ba60b74902185`）含完整 Board（PCB+原理图），元件 101/101、网络 86/86 与 KiCad 源一致（JLC 仅把自动网络名转为大写）。无需 8/31 那条 KiCad 5 降级路线。
+- 该次导入工程已建成，但 pinned `197c8ee` 的导入验收立即按新 UUID 路由而得到 daemon 404（Bridge 切换工程后约 3 秒才重新注册）。harness `38af06e` 起验收先有界等待新工程路由再核验，报错时给出已建工程 UUID 并警告不要重复导入。**pin 因此前移到 `38af06e`。**
+- `import-external` 以当前打开工程的团队作为新工程归属；空白编辑器（未打开任何工程）会报 `no current project or team`。只打开一个目标团队内的工程作为团队锚点即可，它只提供团队、不参与导入内容。
+
 若后段失败，不要重新执行已经成功过的非幂等 `import-kicad`，先：
 
 ~~~sh

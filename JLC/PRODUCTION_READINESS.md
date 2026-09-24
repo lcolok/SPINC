@@ -29,15 +29,19 @@ is **`production-source-gate`**. It fails unless both underlying jobs succeed:
 
 - `verify-reproduction-baseline`: existing source guards, binding manifest,
   round-trip self-test, script syntax, provenance tests, two-build byte equality.
-- `validate-pinned-flow`: builds the exact private harness commit named in
-  `harness-pin.json`, then runs `jlc flow validate`, without live JLCEDA actions.
+- `validate-pinned-flow`: downloads the reproducible `linux/amd64` binary of the
+  exact harness commit named in `harness-pin.json`, requires its SHA-256 to equal
+  `binary.sha256`, runs `jlc flow validate` plus a negative control, without
+  live JLCEDA actions.
 
-The shared harness repository is private. Configure the SPINC Actions secret
-**`JLC_HARNESS_READ_TOKEN`** with only read access to Contents in
-`lcolok/jlc-eda-research`. The ordinary SPINC `GITHUB_TOKEN` is not a cross-repo
-credential. Do not publish the token, store it in Git, copy private harness
-source into public artifacts, or use `pull_request_target` to bypass missing
-fork secrets. Missing authorization intentionally fails the strict source gate.
+The shared harness repository is private, but this job needs no credential: the
+harness is consumed as a hash-anchored executable, not as source. The binary is
+built by `jlc-eda-research/.github/workflows/jlc-harness-binary.yml` (two
+independent builds, byte equality, recorded recipe) and published as a release
+of this repository; see `MAIN_ADMIN_HANDOVER.md` §1. A missing release or any
+hash mismatch intentionally fails the strict source gate. Do not copy private
+harness source into this repository or its artifacts, and do not use
+`pull_request_target`.
 
 Actions are pinned to observed full commits with Node 24 support. Self-hosted
 live runners must support Node 24 (runner >= 2.327.1); verify the actual host
