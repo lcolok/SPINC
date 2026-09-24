@@ -15,6 +15,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from kicad_zone_split import TRANSFORM as ZONE_SPLIT, split_multilayer_zones
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "PCB" / "SPINC AA Charger"
 OUT_DIR = ROOT / "JLC" / "out"
@@ -124,8 +126,20 @@ def build(output: Path) -> dict[str, object]:
             raise SystemExit(f"refusing untracked migration input: {relative}")
         arcname = path.relative_to(SOURCE).as_posix()
         data = committed_payload(path, source_commit)
+        entry: dict[str, object] = {"path": arcname}
+        if arcname.endswith(".kicad_pcb"):
+            # JLCEDA gives every per-layer pour of a multi-layer zone all of
+            # the zone's cached fills; import equivalent single-layer zones.
+            try:
+                text, report = split_multilayer_zones(data.decode("utf-8"))
+            except ValueError as exc:
+                raise SystemExit(f"refusing {arcname}: {ZONE_SPLIT} failed closed: {exc}")
+            entry.update(source_bytes=len(data), source_sha256=sha256(data),
+                         transform=ZONE_SPLIT, transform_report=report)
+            data = text.encode("utf-8")
+        entry.update(bytes=len(data), sha256=sha256(data))
         payloads.append((arcname, data))
-        manifest_files.append({"path": arcname, "bytes": len(data), "sha256": sha256(data)})
+        manifest_files.append(entry)
     manifest = {
         "schema": 1,
         "name": "SPINC JLC Rev A KiCad migration bundle",
