@@ -15,7 +15,17 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from kicad_zone_split import TRANSFORM as ZONE_SPLIT, split_multilayer_zones
+import kicad_npth_copper
+import kicad_smd_paste
+import kicad_zone_split
+
+# Deterministic, fail-closed KiCad -> JLCEDA importer compatibility transforms,
+# applied in this order to the packaged .kicad_pcb only (frozen source untouched).
+PCB_TRANSFORMS = (
+    (kicad_zone_split.TRANSFORM, kicad_zone_split.split_multilayer_zones),
+    (kicad_npth_copper.TRANSFORM, kicad_npth_copper.zero_npth_copper),
+    (kicad_smd_paste.TRANSFORM, kicad_smd_paste.suppress_unpasted_smd),
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "PCB" / "SPINC AA Charger"
@@ -128,14 +138,14 @@ def build(output: Path) -> dict[str, object]:
         data = committed_payload(path, source_commit)
         entry: dict[str, object] = {"path": arcname}
         if arcname.endswith(".kicad_pcb"):
-            # JLCEDA gives every per-layer pour of a multi-layer zone all of
-            # the zone's cached fills; import equivalent single-layer zones.
-            try:
-                text, report = split_multilayer_zones(data.decode("utf-8"))
-            except ValueError as exc:
-                raise SystemExit(f"refusing {arcname}: {ZONE_SPLIT} failed closed: {exc}")
-            entry.update(source_bytes=len(data), source_sha256=sha256(data),
-                         transform=ZONE_SPLIT, transform_report=report)
+            text, applied = data.decode("utf-8"), []
+            for name, transform in PCB_TRANSFORMS:
+                try:
+                    text, report = transform(text)
+                except ValueError as exc:
+                    raise SystemExit(f"refusing {arcname}: {name} failed closed: {exc}")
+                applied.append({"transform": name, "report": report})
+            entry.update(source_bytes=len(data), source_sha256=sha256(data), transforms=applied)
             data = text.encode("utf-8")
         entry.update(bytes=len(data), sha256=sha256(data))
         payloads.append((arcname, data))

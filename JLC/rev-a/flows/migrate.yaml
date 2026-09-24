@@ -169,12 +169,34 @@ stages:
     on_fail: stop
 
   - id: export-gerber
-    title: "Export JLCEDA Gerber fabrication evidence"
-    action: "jlc pcb export gerber -o JLC/out/SPINC-JLC-Rev-A-Gerber.zip"
+    title: "Export JLCEDA Gerber as an explicitly unverified draft"
+    action: "jlc pcb export gerber --draft -o JLC/out/SPINC-JLC-Rev-A-Gerber.draft.zip"
+    gate:
+      exit_code: 0
+      file_exists: "JLC/out/SPINC-JLC-Rev-A-Gerber.draft.zip"
+    evidence: [exit_code, stdout, stderr, file_hash]
+    note: >-
+      The harness release path (`jlc pcb fabrication release`) is bound to Ploopy
+      Altium profiles. SPINC's release gate is the next stage, which compares
+      this draft against the frozen KiCad production Gerbers.
+    on_fail: stop
+
+  - id: gerber-equivalence
+    title: "Release Gerber only if it geometrically reproduces the frozen KiCad Gerbers"
+    action: >-
+      uv run JLC/verify_gerber_equivalence.py
+      --jlc JLC/out/SPINC-JLC-Rev-A-Gerber.draft.zip
+      --report JLC/out/SPINC-JLC-Rev-A-gerber-equivalence.json
+      --release-out JLC/out/SPINC-JLC-Rev-A-Gerber.zip
     gate:
       exit_code: 0
       file_exists: "JLC/out/SPINC-JLC-Rev-A-Gerber.zip"
     evidence: [exit_code, stdout, stderr, file_hash]
+    note: >-
+      Drills/slots 1:1, closed outline, all four copper layers (tracks and pads
+      both ways, pours reported), solder mask and paste both ways. The order
+      file is written only on a full pass. Silkscreen differs by design (JLCEDA
+      re-renders text) and needs a visual review before ordering.
     on_fail: stop
 
   - id: export-epro2

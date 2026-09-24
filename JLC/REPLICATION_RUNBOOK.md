@@ -71,6 +71,7 @@ flow run 会创建真实 JLCEDA 工程，属于 live action；只能在明确授
 - 该次导入工程已建成，但 pinned `197c8ee` 的导入验收立即按新 UUID 路由而得到 daemon 404（Bridge 切换工程后约 3 秒才重新注册）。harness `38af06e` 起验收先有界等待新工程路由再核验，报错时给出已建工程 UUID 并警告不要重复导入。**pin 因此前移到 `38af06e`。**
 - `import-external` 以当前打开工程的团队作为新工程归属；空白编辑器（未打开任何工程）会报 `no current project or team`。只打开一个目标团队内的工程作为团队锚点即可，它只提供团队、不参与导入内容。
 - **多层铺铜必须导入前拆分。** 冻结 KiCad 里 GND 是一个跨 F/In1/In2/B 的 zone（缓存填充 8+1+70+5=84 块）。JLCEDA 把它拆成 4 个单层 pour，却给每个 pour 都塞进全部 84 块填充，导致每层 GND 与其他网络重叠（run `0692ec47`：应用设计间距后仍有 3136 个 Clearance，其中约 2970 个距离为 0）；原生重铺也没有重算这些填充。`build_migration_bundle.py` 现在对 bundle 内的 `.kicad_pcb` 执行确定性变换 `split-multilayer-zones-v1`（`JLC/kicad_zone_split.py`）：每个多层 zone 拆成属性相同、只含本层填充的单层 zone；以填充多重集守恒和“zone 之外逐字节不变”双重校验，遇到不认识的逐层内容即 fail-closed。manifest 同时记录源哈希与变换后哈希。冻结源文件本身不改。
+- **NPTH 与钢网也必须导入前修正，并以 Gerber 等价闸门验收。** 2026-09-25 以 4 个试探工程逐一实测：(1) KiCad 中焊盘=孔径的 6 个 NPTH（SW1/SW3 定位柱 Ø0.75、J1 USB-C 定位柱 Ø0.65）被导入成每层同孔径铜 flash（与冻结 Gerber 相比每层多 2.43 mm²；同一导入器下 JLCPCB DFM 报 0 mil 孔环）。`npth-zero-copper-v1` 把铜几何收敛到 0.001 mm 并以焊盘级阻焊外扩保持开窗=孔径；**不能**改为去掉 `*.Cu`——那会让 NPTH 钻孔文件整体消失。(2) 导入器忽略“无 Paste 层”，给 U1/U3/U5 裸焊盘、TP1 和 4 个 Fiducial 加满钢网。`smd-no-paste-v1` 仅对“有铜无 Paste 层”的 SMD 焊盘加负的焊盘级钢网外扩。三个变换叠加后，JLC 导出与冻结 KiCad Gerber 在钻孔/槽、板框、4 层铜、阻焊、钢网上逐项等价（`JLC/verify_gerber_equivalence.py`，`uv run`）；丝印因 JLC 重新渲染文字而不同，须目视确认。
 
 若后段失败，不要重新执行已经成功过的非幂等 `import-kicad`，先：
 
