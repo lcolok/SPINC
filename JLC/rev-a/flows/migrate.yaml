@@ -91,6 +91,42 @@ stages:
     evidence: [exit_code, stdout, stderr]
     on_fail: stop
 
+  - id: apply-drc-invariants
+    title: "Apply the frozen design's pour clearances to the active DRC matrix"
+    action: "jlc pcb drc apply-invariants --board JLC/rev-a"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    note: >-
+      JLCEDA defaults require 10 mil; the frozen KiCad zones use 0.25 mm. Values
+      are declared in JLC/rev-a/design-invariants.yaml with their source. Each
+      cell is API read back after the UI write and is idempotent.
+    on_fail: stop
+
+  - id: via-hole-min
+    title: "Set the Via Size lower bound below the design's 0.35 mm drill"
+    action: "jlc pcb drc set-via-hole-min --value-mm 0.3"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    note: >-
+      Changes only the DRC lower bound, never an existing via. The frozen design
+      has 136 vias of 0.7/0.35 mm; JLCEDA's default lower bound is 0.5 mm.
+    on_fail: stop
+
+  - id: rebuild-pours
+    title: "Re-pour every imported zone natively under the active rules and save"
+    action: "jlc pcb pour rebuild-native --save --timeout 3m"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    note: >-
+      The importer keeps KiCad's cached pour shapes, which overlapped other nets
+      (2973 zero-distance DRC hits on 2026-09-24). Native re-pour recomputes the
+      fills; the command fails closed unless every pour fills and component,
+      track and via counts are unchanged.
+    on_fail: stop
+
   - id: pcb-drc
     title: "Run JLCEDA PCB DRC"
     action: "jlc pcb drc"
