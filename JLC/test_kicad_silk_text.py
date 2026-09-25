@@ -61,8 +61,8 @@ class FlowGates(unittest.TestCase):
     def test_order_package_requires_silk_and_stackup_evidence(self):
         text = FLOW.read_text(encoding="utf-8")
         order = text[text.index("  - id: order-package"):]
-        self.assertIn("--stackup-3d-report JLC/out/SPINC-JLC-Rev-A2-stackup-3d.json", order)
-        self.assertIn("--project SPINC-JLC-Rev-A2", order)
+        self.assertIn("--stackup-3d-report JLC/out/SPINC-JLC-Rev-A3-stackup-3d.json", order)
+        self.assertIn("--project SPINC-JLC-Rev-A3", order)
         eq = (ROOT / "JLC/verify_gerber_equivalence.py").read_text(encoding="utf-8")
         self.assertNotIn("REPORT_ONLY", eq)
         self.assertIn('gate(f"silk:{gname}"', eq)

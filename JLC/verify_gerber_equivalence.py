@@ -30,9 +30,12 @@ reproduce them. Gates (declared before measurement, not tuned to pass):
   both exports near its anchor:
     * non-text silk (outside all text zones; logos, outlines, pin-1 marks):
       both directions uncovered <= 0.02 mm^2 per layer;
-    * each single-line text: ink capital height |JLC - golden| <= 0.05 mm and
-      ink centre offset <= 0.15 mm, in the text's own frame;
-    * each multi-line text block: height within 10 % and centre <= 0.30 mm;
+    * each single-line text: ink capital height |JLC - golden| <= 0.05 mm;
+      position <= 0.15 mm in the text's own frame: ink centre across the
+      text and along a centred text, text box edge along a left/right
+      justified one (KiCad's glyph side bearing is part of glyph shape);
+    * each multi-line text block: height within 10 %, position <= 0.30 mm;
+    * every ink component belongs to exactly one source text or is non-text;
     * text width is reported only: JLCEDA renders its default stroke font,
       semantically (capital height, anchor, justification) equivalent to
       KiCad's; glyph shapes and advance widths differ by that choice.
@@ -237,16 +240,21 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _text_core(t):
-    """Glyph-probe box of a source text in its own frame, relative to the anchor."""
+def _text_core(t, advance):
+    """Glyph-assignment box of a source text in its own frame, relative to the anchor.
+
+    advance is the per-character half-width factor of the font being probed
+    (KiCad stroke font ~0.40 x size, JLC default font ~0.55 x size after the
+    capital-height translation); vertical extent follows KiCad 8 line layout.
+    """
     n = max(len(line) for line in t.lines)
     rows = len(t.lines)
-    w = n * t.size * 0.8
-    h = t.size * (1 + 1.62 * (rows - 1))
-    cx = {"left": w / 2, "center": 0.0, "right": -w / 2}[t.just_h]
+    hw = n * t.size * advance
+    interline = 1.68 * 0.9583 * t.size
+    h = t.size * (1 + interline / t.size * (rows - 1))
+    cx = {"left": hw, "center": 0.0, "right": -hw}[t.just_h]
     cy = {"bottom": h / 2, "middle": 0.0, "top": -h / 2}[t.just_v]
-    hw = n * t.size * 0.4
-    hh = t.size * 0.45 if rows == 1 else h * 0.45
+    hh = t.size * 0.6 if rows == 1 else h / 2 + t.size * 0.3
     return box(cx - hw, cy - hh, cx + hw, cy + hh)
 
 
@@ -292,54 +300,132 @@ def silk_graphics_geometry(items):
     return shapely.union_all(geoms) if geoms else shapely.Polygon()
 
 
+def _assign_glyphs(parts, texts, advance):
+    """Assign every ink component to at most one text: the text whose glyph box
+    contains the component centroid (nearest anchor on ties). Also returns the
+    pairs of texts that share one component substantially (>= 20 % of its area
+    inside each glyph box): overlapping source texts whose ink is merged."""
+    tree = shapely.STRtree(parts)
+    owner, shared = {}, {}
+    for ti, t in enumerate(texts):
+        core = _from_text_frame(_text_core(t, advance), t)
+        for i in tree.query(core, predicate="intersects"):
+            p = parts[i]
+            if p.intersection(core).area >= 0.2 * p.area:
+                shared.setdefault(i, set()).add(ti)
+            c = p.centroid
+            if not core.contains(c):
+                continue
+            d = math.hypot(c.x - t.x, c.y - t.y)
+            if i not in owner or d < owner[i][1]:
+                owner[i] = (ti, d)
+    glyphs = [[] for _ in texts]
+    for i, (ti, _) in owner.items():
+        glyphs[ti].append(parts[i])
+    unassigned = shapely.union_all([p for i, p in enumerate(parts) if i not in owner]) if parts else shapely.Polygon()
+    pairs = {tuple(sorted(v)) for v in shared.values() if len(v) > 1}
+    return glyphs, unassigned, pairs
+
+
 def silk_compare(a, b, texts, graphics):
     """Semantic text + geometric non-text silkscreen comparison (see module doc).
 
     The source's own non-text silk (rendered from the .kicad_pcb) is removed
     before text glyphs are segmented, so glyphs touching outlines are not
-    merged with them. Any ink explained by neither the rendered graphics nor
-    a source text fails the gate on either side.
+    merged with them. Every remaining ink component must belong to exactly one
+    source text on either side; anything else is unexplained ink.
+
+    Position is compared in each text's frame: across the text (and along it
+    when centred) by ink centre; along a left/right justified text by the text
+    box edge, which KiCad puts thickness/1.52 inside the anchor (FONT::
+    getLinePositions) and the JLC default font starts its ink at (no side
+    bearing). The KiCad glyph side bearing (its ink inside that box edge) is
+    only sanity-bounded, like advance width.
     """
     mask = silk_graphics_geometry(graphics).buffer(0.05, quad_segs=8)
     tg, tj = a.difference(mask), b.difference(mask)
-    pa, pb = list(shapely.get_parts(tg)), list(shapely.get_parts(tj))
-    ta, tb = shapely.STRtree(pa), shapely.STRtree(pb)
-    zones, rows, failures = [], [], []
-    for t in texts:
-        core = _from_text_frame(_text_core(t), t)
-        ga = shapely.union_all([pa[i] for i in ta.query(core, predicate="intersects")])
-        gb = shapely.union_all([pb[i] for i in tb.query(core, predicate="intersects")])
-        row = {"text": t.text, "kind": t.kind}
+    pa = [p for p in shapely.get_parts(tg) if not p.is_empty]
+    pb = [p for p in shapely.get_parts(tj) if not p.is_empty]
+    ga_all, stray_g, pairs = _assign_glyphs(pa, texts, 0.45)
+    gb_all, stray_j, _ = _assign_glyphs(pb, texts, 0.60)
+    # Texts that overlap in the source (merged golden ink) are compared as one
+    # group, like a multi-line block; the source overlap is a design property.
+    group = list(range(len(texts)))
+
+    def root(i):
+        while group[i] != i:
+            group[i] = group[group[i]]
+            i = group[i]
+        return i
+    for pair in pairs:
+        for x in pair[1:]:
+            group[root(x)] = root(pair[0])
+    members = {}
+    for i in range(len(texts)):
+        members.setdefault(root(i), []).append(i)
+    zones, rows, failures, groups = [], [], [], []
+    for idx in [m for m in members.values() if len(m) > 1]:
+        ga = shapely.union_all([g for i in idx for g in ga_all[i]])
+        gb = shapely.union_all([g for i in idx for g in gb_all[i]])
+        row = {"text": " + ".join(texts[i].text for i in idx), "kind": "overlapping-source-texts"}
         if ga.is_empty or gb.is_empty:
-            row["error"] = "no golden ink" if ga.is_empty else "no JLC ink"
+            row["error"] = "no ink"
+            failures.append(row)
+        else:
+            (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = ga.bounds, gb.bounds
+            row.update(golden_wh=[round(ax1 - ax0, 4), round(ay1 - ay0, 4)], jlc_wh=[round(bx1 - bx0, 4), round(by1 - by0, 4)],
+                       centre_offset=round(math.hypot((ax0 + ax1 - bx0 - bx1) / 2, (ay0 + ay1 - by0 - by1) / 2), 4))
+            ok = all(abs(j - g) <= BLOCK_H_REL * g for g, j in zip(row["golden_wh"], row["jlc_wh"])) and row["centre_offset"] <= BLOCK_C_TOL
+            if not ok:
+                failures.append(row)
+            zones.append(box(min(ax0, bx0), min(ay0, by0), max(ax1, bx1), max(ay1, by1)).buffer(0.1))
+        groups.append(row)
+    grouped = {i for m in members.values() if len(m) > 1 for i in m}
+    for ti, (t, gl_a, gl_b) in enumerate(zip(texts, ga_all, gb_all)):
+        if ti in grouped:
+            continue
+        row = {"text": t.text, "kind": t.kind}
+        if not gl_a or not gl_b:
+            row["error"] = "no golden ink" if not gl_a else "no JLC ink"
             failures.append(row)
             rows.append(row)
             continue
+        ga, gb = shapely.union_all(gl_a), shapely.union_all(gl_b)
         fa, fb = _to_text_frame(ga, t), _to_text_frame(gb, t)
         (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = fa.bounds, fb.bounds
+        multi = len(t.lines) > 1
+        edge = t.thickness / 1.52
+        if t.just_h == "left":
+            along_j, bearing = bx0 - edge, ax0 - edge
+        elif t.just_h == "right":
+            along_j, bearing = -edge - bx1, -edge - ax1
+        else:
+            along_j, bearing = (bx0 + bx1 - ax0 - ax1) / 2, 0.0
+        across = (by0 + by1 - ay0 - ay1) / 2
         row.update(golden_h=round(ay1 - ay0, 4), jlc_h=round(by1 - by0, 4),
                    golden_w=round(ax1 - ax0, 4), jlc_w=round(bx1 - bx0, 4),
-                   centre_offset=round(math.hypot((ax0 + ax1 - bx0 - bx1) / 2, (ay0 + ay1 - by0 - by1) / 2), 4))
-        if len(t.lines) == 1:
-            ok = abs(row["jlc_h"] - row["golden_h"]) <= TEXT_H_TOL and row["centre_offset"] <= TEXT_C_TOL
-        else:
-            ok = abs(row["jlc_h"] - row["golden_h"]) <= BLOCK_H_REL * row["golden_h"] and row["centre_offset"] <= BLOCK_C_TOL
+                   along_offset=round(along_j, 4), across_offset=round(across, 4),
+                   kicad_side_bearing=round(bearing, 4), glyphs=[len(gl_a), len(gl_b)])
+        pos_tol = BLOCK_C_TOL if multi else TEXT_C_TOL
+        h_ok = (abs(row["jlc_h"] - row["golden_h"]) <= BLOCK_H_REL * row["golden_h"]) if multi else \
+               (abs(row["jlc_h"] - row["golden_h"]) <= TEXT_H_TOL)
+        ok = h_ok and abs(along_j) <= pos_tol and abs(across) <= pos_tol and -0.01 <= bearing <= 0.35
         if not ok:
             failures.append(row)
         rows.append(row)
         zones.append(_from_text_frame(box(min(ax0, bx0), min(ay0, by0), max(ax1, bx1), max(ay1, by1)), t).buffer(0.1))
     zone = shapely.union_all(zones) if zones else shapely.Polygon()
-    stray_g, stray_j = tg.difference(zone).area, tj.difference(zone).area
     na, nb = a.difference(zone), b.difference(zone)
     miss, extra = uncovered(na, nb), uncovered(nb, na)
-    ok = not failures and miss <= UNCOVERED_MAX and extra <= UNCOVERED_MAX and stray_g <= UNCOVERED_MAX and stray_j <= UNCOVERED_MAX
+    sg, sj = stray_g.area, stray_j.area
+    ok = not failures and miss <= UNCOVERED_MAX and extra <= UNCOVERED_MAX and sg <= UNCOVERED_MAX and sj <= UNCOVERED_MAX
     return {"pass": ok, "texts": len(texts), "graphics": len(graphics),
-            "text_failures": failures[:20], "text_failure_count": len(failures),
+            "text_failures": failures[:20], "text_failure_count": len(failures), "overlapping_text_groups": groups,
             "non_text_golden_uncovered_by_jlc_mm2": round(miss, 5), "non_text_jlc_uncovered_by_golden_mm2": round(extra, 5),
-            "unexplained_golden_ink_mm2": round(stray_g, 5), "unexplained_jlc_ink_mm2": round(stray_j, 5),
+            "unexplained_golden_ink_mm2": round(sg, 5), "unexplained_jlc_ink_mm2": round(sj, 5),
             "non_text_golden_mm2": round(na.area, 3), "text_zone_mm2": round(zone.area, 3),
             "max_text_h_delta": round(max((abs(r["jlc_h"] - r["golden_h"]) for r in rows if "jlc_h" in r), default=0.0), 4),
-            "max_text_centre_offset": round(max((r["centre_offset"] for r in rows if "centre_offset" in r), default=0.0), 4),
+            "max_text_position_offset": round(max((max(abs(r["along_offset"]), abs(r["across_offset"])) for r in rows if "along_offset" in r), default=0.0), 4),
             "text_rows": rows}
 
 
