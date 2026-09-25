@@ -9,10 +9,13 @@ from pathlib import Path
 import verify_drc_residuals as gate
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures/drc-rev-a-411f5895.json"
+# The residual gate's logic is exercised with the superseded two-item list that
+# matches the recorded report; the live list must now be empty.
+HISTORIC_SPEC = Path(__file__).resolve().parent / "fixtures/drc-residuals-rev-a-411f5895.json"
 
 
 def spec():
-    return json.loads(gate.RESIDUALS.read_text(encoding="utf-8"))
+    return json.loads(HISTORIC_SPEC.read_text(encoding="utf-8"))
 
 
 def report():
@@ -24,6 +27,19 @@ def first_item(r, error_type):
         if group["name"] == error_type:
             return group["list"][0]["list"][0]
     raise KeyError(error_type)
+
+
+class LiveResidualSpecTests(unittest.TestCase):
+    def test_live_spec_declares_zero_residuals(self):
+        live = json.loads(gate.RESIDUALS.read_text(encoding="utf-8"))
+        self.assertEqual(sum(gate.declared_keys(live).values()), 0)
+        extra, missing = gate.compare(gate.violation_keys({"pass": True, "total": 0, "raw_items": []}), gate.declared_keys(live))
+        self.assertEqual((extra, missing), ([], []))
+
+    def test_old_report_now_fails_the_live_spec(self):
+        live = json.loads(gate.RESIDUALS.read_text(encoding="utf-8"))
+        extra, _ = gate.compare(gate.violation_keys(report()), gate.declared_keys(live))
+        self.assertEqual(len(extra), 2)
 
 
 class ResidualMatchTests(unittest.TestCase):

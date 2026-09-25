@@ -25,3 +25,15 @@ drc_clearance_overrides:
   - {table: copperThickness1oz, row: "Copper/Plane Zone", col: "Via", value_mm: 0.25}
   - {table: copperThickness1oz, row: "Copper/Plane Zone", col: "Copper/Plane Zone", value_mm: 0.25}
   - {table: copperThickness1oz, row: "Hole", col: "Copper/Plane Zone", value_mm: 0.25}
+
+# Other Spacing (JLCEDA otherClearance). JLCEDA's default requires a component
+# outline 10 mil (0.254 mm) from any pad and measures the component by its
+# bounding box. The frozen KiCad design has no such rule: kicad_pro
+# rule_severities pth_inside_courtyard = ignore and npth_inside_courtyard =
+# ignore, and KiCad never checks courtyard-to-SMD-pad; only courtyards_overlap
+# (component to component) is an error. Measured 2026-09-25: FID2's
+# bounding box sits 1.3 mil from the H1 pad while its courtyard circle is
+# 0.293 mm away. The rule is therefore the design's: device-to-pad 0.
+# Component-to-component and hole-to-hole keep JLCEDA's values.
+drc_other_clearance:
+  device_to_pad_mm: 0

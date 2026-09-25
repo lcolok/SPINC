@@ -54,15 +54,16 @@ class FlowGates(unittest.TestCase):
     def test_semantic_repair_and_gates_precede_order(self):
         ids = re.findall(r"^  - id: (\S+)$", FLOW.read_text(encoding="utf-8"), re.M)
         order = ["slot-regions", "export-imported-epro2", "repair-import-semantics", "import-semantic-project",
-                 "switch-semantic-project", "pcb-drc", "export-gerber", "gerber-equivalence", "export-epro2",
+                 "switch-semantic-project", "sync-schematic", "pcb-drc", "export-gerber", "gerber-equivalence", "export-epro2",
                  "export-3d", "stackup-3d", "order-package"]
         self.assertEqual([i for i in ids if i in order], order)
 
     def test_order_package_requires_silk_and_stackup_evidence(self):
         text = FLOW.read_text(encoding="utf-8")
         order = text[text.index("  - id: order-package"):]
-        self.assertIn("--stackup-3d-report JLC/out/SPINC-JLC-Rev-A5-stackup-3d.json", order)
-        self.assertIn("--project SPINC-JLC-Rev-A5", order)
+        project = re.search(r"--project (\S+)", order).group(1)
+        self.assertIn(f"--stackup-3d-report JLC/out/{project}-stackup-3d.json", order)
+        self.assertIn(f"--gerber-report JLC/out/{project}-gerber-equivalence.json", order)
         eq = (ROOT / "JLC/verify_gerber_equivalence.py").read_text(encoding="utf-8")
         self.assertNotIn("REPORT_ONLY", eq)
         self.assertIn('gate(f"silk:{gname}"', eq)
