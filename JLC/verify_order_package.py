@@ -10,7 +10,9 @@ uses raw footprint origins), so they are used as cross-checks:
   designators are the declared non-assembled/DNP ones;
 - JLC CPL: same designators (plus declared board-only ones) on the same side;
   position and rotation differences exactly equal JLC/rev-a/order-deltas.json;
-- Gerber: the equivalence report passed and names this exact release hash.
+- Gerber: the equivalence report passed (silkscreen included) and names this
+  exact release hash;
+- stackup/3D: verify_3d_stackup.py passed on the ordered JLCEDA project.
 
 Exit 0 = package written to --out; 5 = a check failed (nothing written);
 1 = unreadable inputs.
@@ -138,6 +140,8 @@ def main() -> int:
     p.add_argument("--jlc-cpl", type=Path, required=True)
     p.add_argument("--gerber", type=Path, required=True)
     p.add_argument("--gerber-report", type=Path, required=True)
+    p.add_argument("--stackup-3d-report", type=Path, required=True)
+    p.add_argument("--project", required=True, help="JLCEDA project the exports came from")
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args()
     spec = json.loads(DELTAS.read_text(encoding="utf-8"))
@@ -147,11 +151,16 @@ def main() -> int:
         problems = check(spec, vx.read_csv(bom), vx.read_csv(cpl), read_any_csv(args.jlc_bom), read_any_csv(args.jlc_cpl))
         gerber_report = json.loads(args.gerber_report.read_text(encoding="utf-8"))
         gerber_sha = sha256(args.gerber)
+        stackup_report = json.loads(args.stackup_3d_report.read_text(encoding="utf-8"))
     except (OSError, ValueError, KeyError) as exc:
         print(f"FAIL (inputs): {exc}")
         return 1
     if gerber_report.get("pass") is not True or (gerber_report.get("release") or {}).get("sha256") != gerber_sha:
         problems.append("Gerber is not the release named by a passing equivalence report")
+    if not any(name.startswith("silk:") for name in gerber_report.get("gates", {})):
+        problems.append("equivalence report predates the silkscreen gate")
+    if stackup_report.get("pass") is not True:
+        problems.append("stackup/3D report did not pass")
     if args.out.exists():
         shutil.rmtree(args.out)
     if problems:
@@ -166,6 +175,9 @@ def main() -> int:
                 "harness_commit": json.loads((ROOT / "JLC/harness-pin.json").read_text())["commit"],
                 "gerber_equivalence": {k: v for k, v in gerber_report.items() if k in ("pass", "release")},
                 "board_outline_mm": gerber_report["gates"]["outline"]["jlc_bounds"],
+                "jlc_project": args.project,
+                "stackup_3d": {"pass": True, "inputs": stackup_report.get("inputs", {}),
+                               "board_thickness_mm": stackup_report["gates"]["stackup"]["jlc_stack_total_mm"]},
                 "copper_layers": 4, "files": {}}
     for key, src in files.items():
         dst = args.out / names[key]

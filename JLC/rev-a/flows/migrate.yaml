@@ -29,8 +29,8 @@ preflight:
 
   - id: harness-capability
     type: probe
-    title: "Require the pinned Go harness with native CPL export"
-    action: "jlc pcb export cpl --help"
+    title: "Require the pinned Go harness with native CPL export and KiCad import semantics repair"
+    action: "jlc pcb export cpl --help && jlc pcb epro2-repair-kicad-import --help"
     gate:
       exit_code: 0
     evidence: [exit_code, stdout, stderr]
@@ -142,89 +142,175 @@ stages:
       geometry and the exact primitive delta, and is idempotent.
     on_fail: stop
 
-  - id: pcb-drc
-    title: "Run JLCEDA PCB DRC and require the exact reviewed residual set"
-    action: "python3 JLC/verify_drc_residuals.py --report JLC/out/SPINC-JLC-Rev-A-DRC.json"
+  - id: export-imported-epro2
+    title: "Export the natively repaired import as the semantics-repair input"
+    action: "jlc -p SPINC-JLC-Rev-A project export -o JLC/out/SPINC-JLC-Rev-A.imported.epro2"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/SPINC-JLC-Rev-A-DRC.json"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A.imported.epro2"
+    evidence: [exit_code, stdout, stderr, file_hash]
+    on_fail: stop
+
+  - id: repair-import-semantics
+    title: "Restore KiCad source semantics the importer dropped (offline, deterministic)"
+    action: >-
+      jlc pcb epro2-repair-kicad-import JLC/out/SPINC-JLC-Rev-A.imported.epro2
+      --source "PCB/SPINC AA Charger/SPINC AA Charger.kicad_pcb"
+      -o JLC/out/SPINC-JLC-Rev-A2.semantic.epro2 --json
+    gate:
+      exit_code: 0
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2.semantic.epro2"
+    evidence: [exit_code, stdout, stderr, file_hash]
+    note: >-
+      Root-cause repair of three importer translation defects measured on
+      2026-09-25 (EasyEDA Pro 4.1.60): stackup millimetres written into the mil
+      LAYER_PHYS field (board 0.04 mm in 3D), KiCad keyhole polygons split into
+      independent solid fills (logo holes printed solid), and KiCad capital
+      height copied into the JLC em-size fontSize (text at ~56 % height, top/
+      bottom justification dropped). Only the exact naive-import state is
+      rewritten; anything else fails closed.
+    on_fail: stop
+
+  - id: import-semantic-project
+    title: "Import the semantics-repaired container as SPINC-JLC-Rev-A2 and re-audit it"
+    action: >-
+      jlc pcb epro2-repair-kicad-import JLC/out/SPINC-JLC-Rev-A.imported.epro2
+      --source "PCB/SPINC AA Charger/SPINC AA Charger.kicad_pcb"
+      -o JLC/out/SPINC-JLC-Rev-A2.semantic.epro2
+      --apply --name SPINC-JLC-Rev-A2 --json
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    note: >-
+      Non-idempotent (creates a cloud project). The re-exported cloud copy must
+      audit as fully repaired with zero further changes. After a later-stage
+      failure, resume from that stage instead of replaying this import.
+    on_fail: stop
+
+  - id: switch-semantic-project
+    title: "Open SPINC-JLC-Rev-A2 in the JLCEDA client"
+    action: "jlc project switch SPINC-JLC-Rev-A2"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    on_fail: stop
+
+  - id: activate-semantic-pcb
+    title: "Activate the Rev-A2 PCB document"
+    action: "jlc -p SPINC-JLC-Rev-A2 activate pcb"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    on_fail: stop
+
+  - id: semantic-drc-invariants
+    title: "Re-assert the frozen design's DRC matrix on Rev-A2 (idempotent read-back)"
+    action: "jlc -p SPINC-JLC-Rev-A2 pcb drc apply-invariants --board JLC/rev-a && jlc -p SPINC-JLC-Rev-A2 pcb drc set-via-hole-min --value-mm 0.3"
+    gate:
+      exit_code: 0
+    evidence: [exit_code, stdout, stderr]
+    on_fail: stop
+
+  - id: pcb-drc
+    title: "Run JLCEDA PCB DRC on Rev-A2 and require the exact reviewed residual set"
+    action: "python3 JLC/verify_drc_residuals.py --report JLC/out/SPINC-JLC-Rev-A2-DRC.json"
+    gate:
+      exit_code: 0
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2-DRC.json"
     evidence: [exit_code, stdout, stderr, file_hash]
     note: >-
       Passes only if the live `jlc pcb drc --json` violation multiset equals
       JLC/rev-a/drc-residuals.json (2 reviewed items: FID2 component outline to
       H1 pad, copper gap 1.043 mm; R1 intentionally off-board in the frozen
-      schematic, proven by the live schematic/PCB component difference). Any
-      extra, missing or changed violation exits 5.
+      schematic). Any extra, missing or changed violation exits 5.
     on_fail: stop
 
   - id: export-bom
-    title: "Export migrated BOM and verify JLC device identity drift"
-    action: "jlc bom export -o JLC/out/SPINC-JLC-Rev-A-BOM.csv --format csv"
+    title: "Export Rev-A2 BOM (cross-check only)"
+    action: "jlc -p SPINC-JLC-Rev-A2 bom export -o JLC/out/SPINC-JLC-Rev-A2-BOM.csv --format csv"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/SPINC-JLC-Rev-A-BOM.csv"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2-BOM.csv"
     evidence: [exit_code, stdout, stderr, file_hash]
     note: >-
-      Plain export, cross-checked by the order-package stage. A KiCad import
-      carries no LCSC numbers into JLCEDA, so `--verify` has nothing to verify
-      (harness 5b26ad3 correctly fails it instead of reporting zero drift); the
-      ordered BOM is the frozen upstream bom.csv.
+      A KiCad import carries no LCSC numbers into JLCEDA; the ordered BOM is the
+      frozen upstream bom.csv, cross-checked by order-package.
     on_fail: stop
 
   - id: reactivate-pcb
     title: "Return to PCB after schematic BOM export"
-    action: "jlc activate pcb"
+    action: "jlc -p SPINC-JLC-Rev-A2 activate pcb"
     gate:
       exit_code: 0
     evidence: [exit_code, stdout, stderr]
     on_fail: stop
 
   - id: export-cpl
-    title: "Export native JLCEDA Pick-and-Place/CPL"
-    action: "jlc pcb export cpl -o JLC/out/SPINC-JLC-Rev-A-CPL.csv"
+    title: "Export native JLCEDA Pick-and-Place/CPL from Rev-A2"
+    action: "jlc -p SPINC-JLC-Rev-A2 pcb export cpl -o JLC/out/SPINC-JLC-Rev-A2-CPL.csv"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/SPINC-JLC-Rev-A-CPL.csv"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2-CPL.csv"
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
   - id: export-gerber
-    title: "Export JLCEDA Gerber as an explicitly unverified draft"
-    action: "jlc pcb export gerber --draft -o JLC/out/SPINC-JLC-Rev-A-Gerber.draft.zip"
+    title: "Export Rev-A2 Gerber as an explicitly unverified draft"
+    action: "jlc -p SPINC-JLC-Rev-A2 pcb export gerber --draft -o JLC/out/SPINC-JLC-Rev-A2-Gerber.draft.zip"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/SPINC-JLC-Rev-A-Gerber.draft.zip"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2-Gerber.draft.zip"
     evidence: [exit_code, stdout, stderr, file_hash]
-    note: >-
-      The harness release path (`jlc pcb fabrication release`) is bound to Ploopy
-      Altium profiles. SPINC's release gate is the next stage, which compares
-      this draft against the frozen KiCad production Gerbers.
     on_fail: stop
 
   - id: gerber-equivalence
-    title: "Release Gerber only if it geometrically reproduces the frozen KiCad Gerbers"
+    title: "Release Gerber only if every layer, silkscreen included, reproduces the frozen KiCad Gerbers"
     action: >-
       uv run JLC/verify_gerber_equivalence.py
-      --jlc JLC/out/SPINC-JLC-Rev-A-Gerber.draft.zip
-      --report JLC/out/SPINC-JLC-Rev-A-gerber-equivalence.json
-      --release-out JLC/out/SPINC-JLC-Rev-A-Gerber.zip
+      --jlc JLC/out/SPINC-JLC-Rev-A2-Gerber.draft.zip
+      --report JLC/out/SPINC-JLC-Rev-A2-gerber-equivalence.json
+      --release-out JLC/out/SPINC-JLC-Rev-A2-Gerber.zip
     gate:
       exit_code: 0
-      file_exists: "JLC/out/SPINC-JLC-Rev-A-Gerber.zip"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2-Gerber.zip"
     evidence: [exit_code, stdout, stderr, file_hash]
     note: >-
-      Drills/slots 1:1, closed outline, all four copper layers (tracks and pads
-      both ways, pours reported), solder mask and paste both ways. The order
-      file is written only on a full pass. Silkscreen differs by design (JLCEDA
-      re-renders text) and needs a visual review before ordering.
+      Drills/slots 1:1, closed outline, four copper layers, mask and paste both
+      ways, and silkscreen: non-text silk geometric (logos, outlines, pin-1
+      marks), every visible text by capital height and position, no
+      unexplained ink on either side. Silk was report-only before 2026-09-25;
+      that let the importer's solid logo and 56 %-height text reach an order
+      package.
     on_fail: stop
 
   - id: export-epro2
-    title: "Export migrated JLCEDA project container"
-    action: "jlc project export -o JLC/out/SPINC-JLC-Rev-A.epro2"
+    title: "Export the Rev-A2 project container"
+    action: "jlc -p SPINC-JLC-Rev-A2 project export -o JLC/out/SPINC-JLC-Rev-A2.epro2"
     gate:
       exit_code: 0
-      file_exists: "JLC/out/SPINC-JLC-Rev-A.epro2"
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2.epro2"
+    evidence: [exit_code, stdout, stderr, file_hash]
+    on_fail: stop
+
+  - id: export-3d
+    title: "Export the Rev-A2 board 3D model (the geometry the 3D preview renders)"
+    action: "jlc -p SPINC-JLC-Rev-A2 pcb export 3d --type obj --categories Via --auto-generate=false -o JLC/out/SPINC-JLC-Rev-A2-3d.obj.zip"
+    gate:
+      exit_code: 0
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2-3d.obj.zip"
+    evidence: [exit_code, stdout, stderr, file_hash]
+    on_fail: stop
+
+  - id: stackup-3d
+    title: "Require the source stackup and a 3D model with the source thickness and a milled channel"
+    action: >-
+      uv run JLC/verify_3d_stackup.py
+      --epro2 JLC/out/SPINC-JLC-Rev-A2.epro2
+      --obj JLC/out/SPINC-JLC-Rev-A2-3d.obj.zip
+      --report JLC/out/SPINC-JLC-Rev-A2-stackup-3d.json
+    gate:
+      exit_code: 0
+      file_exists: "JLC/out/SPINC-JLC-Rev-A2-stackup-3d.json"
     evidence: [exit_code, stdout, stderr, file_hash]
     on_fail: stop
 
@@ -232,10 +318,12 @@ stages:
     title: "Assemble the JLCPCB order package only if the migration is proven"
     action: >-
       python3 JLC/verify_order_package.py
-      --jlc-bom JLC/out/SPINC-JLC-Rev-A-BOM.csv
-      --jlc-cpl JLC/out/SPINC-JLC-Rev-A-CPL.csv
-      --gerber JLC/out/SPINC-JLC-Rev-A-Gerber.zip
-      --gerber-report JLC/out/SPINC-JLC-Rev-A-gerber-equivalence.json
+      --jlc-bom JLC/out/SPINC-JLC-Rev-A2-BOM.csv
+      --jlc-cpl JLC/out/SPINC-JLC-Rev-A2-CPL.csv
+      --gerber JLC/out/SPINC-JLC-Rev-A2-Gerber.zip
+      --gerber-report JLC/out/SPINC-JLC-Rev-A2-gerber-equivalence.json
+      --stackup-3d-report JLC/out/SPINC-JLC-Rev-A2-stackup-3d.json
+      --project SPINC-JLC-Rev-A2
       --out JLC/out/order
     gate:
       exit_code: 0
@@ -247,7 +335,5 @@ stages:
       the frozen upstream bom.csv/positions.csv byte-identical. The JLC BOM/CPL
       must match them except for the exact differences declared in
       JLC/rev-a/order-deltas.json. Placement rotations/offsets still need the
-      JLCPCB assembly preview review before payment. The former roundtrip
-      stage assumed LCSC-bound JLCEDA devices and is retained as
-      JLC/verify_jlc_export.py for that future path.
+      JLCPCB assembly preview review before payment.
     on_fail: stop
