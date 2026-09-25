@@ -30,11 +30,12 @@ reproduce them. Gates (declared before measurement, not tuned to pass):
   both exports near its anchor:
     * non-text silk (outside all text zones; logos, outlines, pin-1 marks):
       both directions uncovered <= 0.02 mm^2 per layer;
-    * each single-line text: ink capital height |JLC - golden| <= 0.05 mm;
-      position <= 0.15 mm in the text's own frame: ink centre across the
-      text and along a centred text, text box edge along a left/right
-      justified one (KiCad's glyph side bearing is part of glyph shape);
-    * each multi-line text block: height within 10 %, position <= 0.30 mm;
+    * silk text is drawn in KiCad's own newstroke glyphs (TrueType built by
+      JLC/fonts/build_kicad_newstroke_ttf.py), so text is compared like
+      geometry: each single-line text's ink box, in the text's own frame,
+      within 0.05 mm on all four edges (width included); each multi-line
+      block and each group of texts already overlapping in the source within
+      0.10 mm on all four edges;
     * every ink component belongs to exactly one source text or is non-text;
     * text width is reported only: JLCEDA renders its default stroke font,
       semantically (capital height, anchor, justification) equivalent to
@@ -86,10 +87,9 @@ PASTE = [("F_Paste", "Gerber_TopPasteMaskLayer.GTP"), ("B_Paste", "Gerber_Bottom
 SILK = [("F_SilkS", "Gerber_TopSilkscreenLayer.GTO", "F_Mask", "F.SilkS"),
         ("B_SilkS", "Gerber_BottomSilkscreenLayer.GBO", "B_Mask", "B.SilkS")]
 SOURCE_BOARD = ROOT / "PCB/SPINC AA Charger/SPINC AA Charger.kicad_pcb"
+TEXT_EDGE_TOL = 0.05     # mm, every ink-box edge of a single-line text
+BLOCK_EDGE_TOL = 0.10    # mm, every ink-box edge of a multi-line block / overlap group
 TEXT_H_TOL = 0.05        # mm, capital height, single-line text
-TEXT_C_TOL = 0.15        # mm, ink centre, single-line text
-BLOCK_H_REL = 0.10       # multi-line block height
-BLOCK_C_TOL = 0.30       # mm, multi-line block centre
 DRAFT_MARKER = "JLC_DRAFT_NOT_RELEASED.txt"
 GOLDEN_DRILLS = [("PTH.drl", True), ("NPTH.drl", False)]
 JLC_DRILLS = [("Drill_PTH_Through.DRL", True), ("Drill_PTH_Through_Via.DRL", True), ("Drill_NPTH_Through.DRL", False)]
@@ -335,12 +335,9 @@ def silk_compare(a, b, texts, graphics):
     merged with them. Every remaining ink component must belong to exactly one
     source text on either side; anything else is unexplained ink.
 
-    Position is compared in each text's frame: across the text (and along it
-    when centred) by ink centre; along a left/right justified text by the text
-    box edge, which KiCad puts thickness/1.52 inside the anchor (FONT::
-    getLinePositions) and the JLC default font starts its ink at (no side
-    bearing). The KiCad glyph side bearing (its ink inside that box edge) is
-    only sanity-bounded, like advance width.
+    Each text's ink box is compared edge by edge in the text's own frame: the
+    JLC silk is drawn in KiCad's own glyphs, so width, height and position
+    must all match the frozen Gerber.
     """
     mask = silk_graphics_geometry(graphics).buffer(0.05, quad_segs=8)
     tg, tj = a.difference(mask), b.difference(mask)
@@ -375,7 +372,8 @@ def silk_compare(a, b, texts, graphics):
             (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = ga.bounds, gb.bounds
             row.update(golden_wh=[round(ax1 - ax0, 4), round(ay1 - ay0, 4)], jlc_wh=[round(bx1 - bx0, 4), round(by1 - by0, 4)],
                        centre_offset=round(math.hypot((ax0 + ax1 - bx0 - bx1) / 2, (ay0 + ay1 - by0 - by1) / 2), 4))
-            ok = all(abs(j - g) <= BLOCK_H_REL * g for g, j in zip(row["golden_wh"], row["jlc_wh"])) and row["centre_offset"] <= BLOCK_C_TOL
+            row["max_edge_delta"] = round(max(abs(bx0 - ax0), abs(by0 - ay0), abs(bx1 - ax1), abs(by1 - ay1)), 4)
+            ok = row["max_edge_delta"] <= BLOCK_EDGE_TOL
             if not ok:
                 failures.append(row)
             zones.append(box(min(ax0, bx0), min(ay0, by0), max(ax1, bx1), max(ay1, by1)).buffer(0.1))
@@ -394,22 +392,11 @@ def silk_compare(a, b, texts, graphics):
         fa, fb = _to_text_frame(ga, t), _to_text_frame(gb, t)
         (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = fa.bounds, fb.bounds
         multi = len(t.lines) > 1
-        edge = t.thickness / 1.52
-        if t.just_h == "left":
-            along_j, bearing = bx0 - edge, ax0 - edge
-        elif t.just_h == "right":
-            along_j, bearing = -edge - bx1, -edge - ax1
-        else:
-            along_j, bearing = (bx0 + bx1 - ax0 - ax1) / 2, 0.0
-        across = (by0 + by1 - ay0 - ay1) / 2
+        edges = [bx0 - ax0, by0 - ay0, bx1 - ax1, by1 - ay1]
         row.update(golden_h=round(ay1 - ay0, 4), jlc_h=round(by1 - by0, 4),
                    golden_w=round(ax1 - ax0, 4), jlc_w=round(bx1 - bx0, 4),
-                   along_offset=round(along_j, 4), across_offset=round(across, 4),
-                   kicad_side_bearing=round(bearing, 4), glyphs=[len(gl_a), len(gl_b)])
-        pos_tol = BLOCK_C_TOL if multi else TEXT_C_TOL
-        h_ok = (abs(row["jlc_h"] - row["golden_h"]) <= BLOCK_H_REL * row["golden_h"]) if multi else \
-               (abs(row["jlc_h"] - row["golden_h"]) <= TEXT_H_TOL)
-        ok = h_ok and abs(along_j) <= pos_tol and abs(across) <= pos_tol and -0.01 <= bearing <= 0.35
+                   edge_delta=[round(e, 4) for e in edges], glyphs=[len(gl_a), len(gl_b)])
+        ok = max(abs(e) for e in edges) <= (BLOCK_EDGE_TOL if multi else TEXT_EDGE_TOL)
         if not ok:
             failures.append(row)
         rows.append(row)
@@ -425,7 +412,7 @@ def silk_compare(a, b, texts, graphics):
             "unexplained_golden_ink_mm2": round(sg, 5), "unexplained_jlc_ink_mm2": round(sj, 5),
             "non_text_golden_mm2": round(na.area, 3), "text_zone_mm2": round(zone.area, 3),
             "max_text_h_delta": round(max((abs(r["jlc_h"] - r["golden_h"]) for r in rows if "jlc_h" in r), default=0.0), 4),
-            "max_text_position_offset": round(max((max(abs(r["along_offset"]), abs(r["across_offset"])) for r in rows if "along_offset" in r), default=0.0), 4),
+            "max_text_edge_delta": round(max((max(abs(e) for e in r["edge_delta"]) for r in rows if "edge_delta" in r), default=0.0), 4),
             "text_rows": rows}
 
 
