@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "intent": "Exact, reviewed differences between the JLCEDA-exported BOM/CPL of the imported SPINC-JLC-Rev-A project and the frozen upstream JLCPCB production files. The order-package gate passes only if the measured differences equal this list; anything extra, missing or changed fails.",
-  "measured": "run 830ea1b3, project SPINC-JLC-Rev-A6 (harness 5833d93), 2026-09-25; superseded measurement: run 2be4cd66, project SPINC-JLC-Rev-A",
+  "measured": "run 2be4cd66, project SPINC-JLC-Rev-A 28afaec96a43428588c51e6c35a3d377, 2026-09-25",
   "orderFiles": {
     "bom": "PCB/SPINC AA Charger/production/bom.csv",
     "cpl": "PCB/SPINC AA Charger/production/positions.csv",
@@ -11,14 +11,25 @@
     "designators": [
       "H1",
       "H2",
+      "REF**",
       "TP1"
     ],
-    "reason": "Mounting holes H1/H2 and an unpopulated test pad TP1; none is assembled or present in the upstream CPL. The two board-only logos (KiCad board_only footprints OSHW-Symbol_6.7x6mm_SilkScreen, KiCad-Logo2_5mm_SilkScreen) are no longer components since epro2-repair-kicad-import expands board_only footprints into board graphics, so no REF** placement is exported.",
-    "placeholderRows": 0
+    "reason": "Mounting holes H1/H2, an unpopulated test pad TP1 and two board-only logos exported under KiCad's placeholder reference REF** (OSHW-Symbol_6.7x6mm_SilkScreen and KiCad-Logo2_5mm_SilkScreen); none is assembled or present in the upstream CPL.",
+    "placeholderRows": 2
   },
   "jlcBomNotInOrderBom": {
-    "designators": [],
-    "reason": "Since epro2-repair-kicad-import --schematic carries the KiCad exclude_from_bom/dnp flags (FID1-4, H1, H2, R1, TH3, TP1) and the audited sync-schematic sets 加入BOM to the KiCad source, the JLC BOM lists exactly the populated designators of the order BOM."
+    "designators": [
+      "FID1",
+      "FID2",
+      "FID3",
+      "FID4",
+      "H1",
+      "H2",
+      "R1",
+      "TH3",
+      "TP1"
+    ],
+    "reason": "Fiducials, mounting holes and test pad are not parts; R1 is (on_board no)(dnp yes) and TH3 is DNP in the frozen design (JLC/verify_jlc_export.py DNP_REFS)."
   },
   "valueAliases": {
     "U8": {

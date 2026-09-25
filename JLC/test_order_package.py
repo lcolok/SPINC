@@ -1,4 +1,10 @@
-"""Offline tests for the order-package gate using the real run-2be4cd66 exports."""
+"""Offline tests for the order-package gate.
+
+The mutation tests run against the real run-2be4cd66 exports (SPINC-JLC-Rev-A,
+before the import-semantics repair) with the delta list measured on them, kept
+in fixtures/order-deltas-rev-a-2be4cd66.json. The live list
+JLC/rev-a/order-deltas.json must match the run-830ea1b3 exports
+(SPINC-JLC-Rev-A6) exactly."""
 from __future__ import annotations
 
 import copy
@@ -14,7 +20,7 @@ FIX = Path(__file__).resolve().parent / "fixtures"
 
 class OrderPackageTests(unittest.TestCase):
     def setUp(self):
-        self.spec = json.loads(op.DELTAS.read_text(encoding="utf-8"))
+        self.spec = json.loads((FIX / "order-deltas-rev-a-2be4cd66.json").read_text(encoding="utf-8"))
         self.gb = vx.read_csv(op.ROOT / self.spec["orderFiles"]["bom"])
         self.gc = vx.read_csv(op.ROOT / self.spec["orderFiles"]["cpl"])
         self.jb = op.read_any_csv(FIX / "jlc-export-2be4cd66-bom.csv")
@@ -30,6 +36,19 @@ class OrderPackageTests(unittest.TestCase):
 
     def test_measured_exports_match_declared_deltas_exactly(self):
         self.assertEqual(self.problems(), [])
+
+    def test_live_deltas_match_rev_a6_exports_exactly(self):
+        spec = json.loads(op.DELTAS.read_text(encoding="utf-8"))
+        jb = op.read_any_csv(FIX / "jlc-export-830ea1b3-bom.csv")
+        jc = op.read_any_csv(FIX / "jlc-export-830ea1b3-cpl.csv")
+        self.assertEqual(op.check(spec=spec, gold_bom_rows=self.gb, gold_cpl_rows=self.gc, jlc_bom_rows=jb, jlc_cpl_rows=jc), [])
+        self.assertFalse(any(r["Designator"] == "REF**" for r in jc))  # board-only logos are graphics now
+        self.assertEqual(spec["jlcBomNotInOrderBom"]["designators"], [])
+
+    def test_historic_deltas_fail_on_rev_a6_exports(self):
+        jb = op.read_any_csv(FIX / "jlc-export-830ea1b3-bom.csv")
+        jc = op.read_any_csv(FIX / "jlc-export-830ea1b3-cpl.csv")
+        self.assertNotEqual(self.problems(jlc_bom_rows=jb, jlc_cpl_rows=jc), [])
 
     def test_jlc_cpl_is_utf16_tsv(self):
         self.assertTrue((FIX / "jlc-export-2be4cd66-cpl.csv").read_bytes().startswith(b"\xff\xfe"))
