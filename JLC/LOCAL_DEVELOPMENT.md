@@ -100,7 +100,7 @@ shasum -a 256 -c SHA256SUMS
 
 ## 6. 固定 loader 的独立只读验证
 
-> 2026-09-25 起 pin 为 harness `f5626923626f8c60568ae8b5e7e80da1c622f0df`（此前 `f6d03bd`、`5b26ad3`、`38af06e`；`jlc pcb epro2-repair-kicad-import` v2）。源码 CI 不再读取私有仓，而是按 `harness-pin.json` 的 `binary.sha256` 下载本仓 release `harness-jlc-f5626923626f` 中的可复现 `linux/amd64` 二进制（构建见 `MAIN_ADMIN_HANDOVER.md` §1）。下文 `197c8ee` 内容为历史记录。
+> 2026-09-25 起 pin 为 harness `af6e7578bd9f7801cf2a2981bc411ecf241e082a`（此前 `f562692`、`f6d03bd`、`5b26ad3`、`38af06e`；`jlc pcb epro2-repair-kicad-import` v3）。源码 CI 不再读取私有仓，而是按 `harness-pin.json` 的 `binary.sha256` 下载本仓 release `harness-jlc-af6e7578bd9f` 中的可复现 `linux/amd64` 二进制（构建见 `MAIN_ADMIN_HANDOVER.md` §1）。下文 `197c8ee` 内容为历史记录。
 
 普通本机入口只验证 pin 的数据契约，不自动取私有仓库或构建 loader。以下命令是在已经核实来源、完整 commit 和干净状态的隔离 worktree 中执行的：
 
