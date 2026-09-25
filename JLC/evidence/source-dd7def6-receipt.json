@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "verified_on": "2026-09-08",
+  "source_commit": "dd7def6b68982b6eda497bcf6d3e2b6ff0a43004",
+  "workflow_run_id": 33358345121,
+  "qualification": "historical-source-only",
+  "permanent_archive_status": "pending; receipt does not contain artifact bytes",
+  "results": [
+    {
+      "file": "SPINC-dd7def6-KiCad-artifact.zip",
+      "sha256": "b2ee656697d514a3acfce7509a4466f7c59bad76ccd98444f0e86f56c8946fda",
+      "github_digest_match": true,
+      "zip_crc_pass": true,
+      "bytes": 1132175
+    },
+    {
+      "file": "SPINC-dd7def6-Audit-Kit-artifact.zip",
+      "sha256": "e59bbbec7cf65096a565209986f6a3f699ad0460931300753a7b5fe38de205e3",
+      "github_digest_match": true,
+      "zip_crc_pass": true,
+      "bytes": 10392
+    },
+    {
+      "inner_bundle_sha256": "98e0dfa982b284a03fbe30f7ceadd699c991a687daed08bf9d2265ff441eb2f0",
+      "source_commit": "dd7def6b68982b6eda497bcf6d3e2b6ff0a43004",
+      "manifest_files_verified": 30
+    }
+  ]
+}

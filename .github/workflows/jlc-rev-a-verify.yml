@@ -1,0 +1,189 @@
+name: JLC Rev A verification
+
+on:
+  push:
+    branches: [main, jlc-rev-a]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jlc-source-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify-reproduction-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6, Node 24
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6, Node 24
+        with:
+          python-version: '3.11'
+
+      - name: Verify source and tooling
+        run: |
+          mkdir -p JLC/out
+          python JLC/verify_rev_a.py | tee JLC/out/source-verification.txt
+          python JLC/verify_power_stage.py | tee JLC/out/power-stage-verification.txt
+          python JLC/build_jlc_binding_manifest.py --check
+          python JLC/verify_harness_pin.py
+          test "$(cat JLC/rev-a/board-id)" = "spinc-jlc-rev-a"
+          test -s JLC/rev-a/flows/migrate.yaml
+          python JLC/verify_jlc_export.py --self-test
+          python Platformio/verify_firmware_contract.py | tee JLC/out/firmware-contract.txt
+          python -m unittest discover -s Platformio -p 'test_*.py' -v 2>&1 | tee JLC/out/firmware-contract-tests.txt
+          python -m unittest discover -s JLC -p 'test_*.py' -v 2>&1 | tee JLC/out/governance-tests.txt
+          node --check JLC/jlceda-scripts/import-rev-a-kicad.js
+          node --check JLC/jlceda-scripts/audit-jlc-library-bindings.js
+          node --check JLC/jlceda-scripts/export-rev-a-audit.js
+
+      - name: Build and reproduce migration bundle
+        run: |
+          python JLC/build_migration_bundle.py | tee JLC/out/bundle-build.txt
+          python JLC/build_migration_bundle.py --output "$RUNNER_TEMP/reproduction.zip" > "$RUNNER_TEMP/reproduction.log"
+          cmp JLC/out/SPINC-JLC-Rev-A-KiCad.zip "$RUNNER_TEMP/reproduction.zip"
+
+      - name: Record source-only provenance and checksums
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, subprocess, zipfile
+          from pathlib import Path
+          git = lambda *args: subprocess.check_output(['git', *args], text=True).strip()
+          commit = git('rev-parse', 'HEAD')
+          if commit != os.environ['GITHUB_SHA']:
+              raise SystemExit('checkout SHA does not match tested GitHub SHA')
+          bundle = Path('JLC/out/SPINC-JLC-Rev-A-KiCad.zip')
+          with zipfile.ZipFile(bundle) as z:
+              manifest = json.loads(z.read('JLC-MIGRATION-MANIFEST.json'))
+              if manifest['source_commit'] != commit or 'source_branch' in manifest:
+                  raise SystemExit('incorrect or branch-dependent bundle provenance')
+          pin = json.loads(Path('JLC/harness-pin.json').read_text())
+          evidence = {
+              'schema': 1, 'qualification': 'source-only-not-manufacturing-or-golden',
+              'source_commit': commit, 'source_tree': git('rev-parse', 'HEAD^{tree}'),
+              'event': os.environ['GITHUB_EVENT_NAME'], 'event_ref': os.environ['GITHUB_REF'],
+              'pr_head_sha': os.getenv('PR_HEAD_SHA') or None,
+              'pr_base_sha': os.getenv('PR_BASE_SHA') or None,
+              'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'harness_commit': pin['commit'],
+              'bundle_sha256': hashlib.sha256(bundle.read_bytes()).hexdigest(),
+          }
+          Path('JLC/out/source-provenance.json').write_text(json.dumps(evidence, indent=2) + '\n')
+          PY
+          sums_tmp="$RUNNER_TEMP/SPINC-JLC-SHA256SUMS"
+          (cd JLC/out && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum) > "$sums_tmp"
+          mv "$sums_tmp" JLC/out/SHA256SUMS
+
+      - name: Publish migration bundle
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
+        with:
+          name: SPINC-JLC-Rev-A-KiCad-${{ github.sha }}
+          path: JLC/out/SPINC-JLC-Rev-A-KiCad.zip
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish JLCEDA audit kit
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
+        with:
+          name: SPINC-JLC-Rev-A-Audit-Kit-${{ github.sha }}
+          path: |
+            JLC/harness-pin.json
+            JLC/jlc-bindings.json
+            JLC/rev-a/board-id
+            JLC/rev-a/flows/migrate.yaml
+            JLC/jlceda-scripts/*.js
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish source verification evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6, Node 24
+        with:
+          name: SPINC-JLC-Rev-A-Source-Evidence-${{ github.sha }}
+          path: JLC/out/
+          if-no-files-found: error
+          retention-days: 90
+
+  validate-pinned-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout tested source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve immutable harness contract
+        id: pin
+        run: python3 JLC/verify_harness_pin.py --github-output "$GITHUB_OUTPUT"
+
+      # No credential: the private harness is consumed as the exact reproducible
+      # binary of the pinned commit, anchored by SHA-256 in harness-pin.json.
+      # The release location is untrusted; a hash mismatch fails closed.
+      - name: Fetch and verify exact pinned harness binary
+        env:
+          BINARY_URL: ${{ steps.pin.outputs.binary_url }}
+          BINARY_SHA256: ${{ steps.pin.outputs.binary_sha256 }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --retry 3 --output "$RUNNER_TEMP/jlc" "$BINARY_URL"
+          echo "$BINARY_SHA256  $RUNNER_TEMP/jlc" | sha256sum --check --strict -
+          chmod 0555 "$RUNNER_TEMP/jlc"
+
+      - name: Validate authored flow with pinned production loader
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/jlc" flow validate --board "$GITHUB_WORKSPACE/JLC/rev-a" --flow migrate | tee "$RUNNER_TEMP/flow-validation.txt"
+          # Negative control: the same bytes must reject a corrupted flow.
+          cp -R JLC/rev-a "$RUNNER_TEMP/negative"
+          perl -0pi -e 's/- id: /- idx: /' "$RUNNER_TEMP/negative/flows/migrate.yaml"
+          if "$RUNNER_TEMP/jlc" flow validate --board "$RUNNER_TEMP/negative" --flow migrate; then
+            echo '::error::pinned loader accepted a corrupted flow'; exit 1
+          fi
+          printf '%s\n' "${{ github.sha }}" > "$RUNNER_TEMP/validated-source-sha.txt"
+          printf '%s\n' "${{ steps.pin.outputs.commit }}" > "$RUNNER_TEMP/validated-harness-sha.txt"
+          sha256sum "$RUNNER_TEMP/jlc" | cut -d' ' -f1 > "$RUNNER_TEMP/validated-harness-binary-sha256.txt"
+
+      - name: Publish strict validation evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: SPINC-JLC-Rev-A-Flow-Validation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flow-validation.txt
+            ${{ runner.temp }}/validated-source-sha.txt
+            ${{ runner.temp }}/validated-harness-sha.txt
+            ${{ runner.temp }}/validated-harness-binary-sha256.txt
+          if-no-files-found: error
+          retention-days: 90
+
+  production-source-gate:
+    if: always()
+    needs: [verify-reproduction-baseline, validate-pinned-flow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require both source and strict flow validation
+        env:
+          SOURCE_RESULT: ${{ needs.verify-reproduction-baseline.result }}
+          FLOW_RESULT: ${{ needs.validate-pinned-flow.result }}
+        run: |
+          test "$SOURCE_RESULT" = success
+          test "$FLOW_RESULT" = success
+          echo 'Source gate passed. This is not manufacturing or physical Golden approval.'

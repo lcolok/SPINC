@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "intent": "Exact, reviewed differences between the JLCEDA-exported BOM/CPL of the imported SPINC-JLC-Rev-A project and the frozen upstream JLCPCB production files. The order-package gate passes only if the measured differences equal this list; anything extra, missing or changed fails.",
+  "measured": "run 830ea1b3, project SPINC-JLC-Rev-A6 (harness 5833d93), 2026-09-25; superseded measurement: run 2be4cd66, project SPINC-JLC-Rev-A",
+  "orderFiles": {
+    "bom": "PCB/SPINC AA Charger/production/bom.csv",
+    "cpl": "PCB/SPINC AA Charger/production/positions.csv",
+    "reason": "JLCEDA's KiCad importer carries no LCSC part numbers into the project (all 48 exported BOM rows have empty Manufacturer/Supplier Part), and its CPL uses raw KiCad footprint origins and orientations. The frozen upstream bom.csv (44 unique LCSC parts, 91 populated designators, identical to JLC/jlc-bindings.json) and positions.csv are the designer's JLCPCB assembly files and are ordered byte-identical."
+  },
+  "jlcOnlyPlacements": {
+    "designators": [
+      "H1",
+      "H2",
+      "TP1"
+    ],
+    "reason": "Mounting holes H1/H2 and an unpopulated test pad TP1; none is assembled or present in the upstream CPL. The two board-only logos (KiCad board_only footprints OSHW-Symbol_6.7x6mm_SilkScreen, KiCad-Logo2_5mm_SilkScreen) are no longer components since epro2-repair-kicad-import expands board_only footprints into board graphics, so no REF** placement is exported.",
+    "placeholderRows": 0
+  },
+  "jlcBomNotInOrderBom": {
+    "designators": [],
+    "reason": "Since epro2-repair-kicad-import --schematic carries the KiCad exclude_from_bom/dnp flags (FID1-4, H1, H2, R1, TH3, TP1) and the audited sync-schematic sets 加入BOM to the KiCad source, the JLC BOM lists exactly the populated designators of the order BOM."
+  },
+  "valueAliases": {
+    "U8": {
+      "order": "DS2712E+",
+      "jlc": "DS2712",
+      "reason": "Frozen schematic symbol omoteLib:DS2712 has Value 'DS2712'; the upstream production BOM names the orderable TSSOP-16 part 'DS2712E+' with LCSC C7455651, identical to JLC/jlc-bindings.json. The difference is inside the frozen design, not an import change."
+    }
+  },
+  "positionDeltasMm": {
+    "J1": [
+      0.0,
+      -1.498
+    ],
+    "J2": [
+      0.015,
+      0.0
+    ],
+    "J3": [
+      0.0,
+      0.45
+    ],
+    "J4": [
+      -0.425,
+      0.0
+    ],
+    "J5": [
+      0.425,
+      0.0
+    ]
+  },
+  "rotationPairs": {
+    "D3": [
+      270.0,
+      90.0
+    ],
+    "FID2": [
+      0.0,
+      180.0
+    ],
+    "FID3": [
+      0.0,
+      180.0
+    ],
+    "Q1": [
+      0.0,
+      180.0
+    ],
+    "Q3": [
+      0.0,
+      180.0
+    ],
+    "Q4": [
+      90.0,
+      270.0
+    ],
+    "Q5": [
+      0.0,
+      180.0
+    ],
+    "U4": [
+      180.0,
+      0.0
+    ],
+    "U5": [
+      90.0,
+      0.0
+    ],
+    "U8": [
+      270.0,
+      0.0
+    ]
+  },
+  "deltaReason": "Inference, to be confirmed in the JLCPCB assembly placement preview before payment: upstream positions.csv applies JLCPCB part-origin offsets (connector body centres) and orientation corrections (SOT-23, TSOT-23, SOT-23-5, QFN-56, TSSOP-16, bottom fiducials) that JLCEDA does not apply to KiCad-imported footprints. rotationPairs are [upstream, jlcExport] in degrees."
+}

@@ -1,0 +1,45 @@
+{
+  "schema": 2,
+  "repository": "lcolok/jlc-eda-research",
+  "branch": "main",
+  "commit": "5833d9330fbc36e22932732963b9be4ab390aa1d",
+  "binary": {
+    "platform": "linux/amd64",
+    "asset": "jlc-linux-amd64",
+    "releaseTag": "harness-jlc-5833d9330fbc",
+    "sha256": "a3b1b25322a82f2eca5d2bf63b43b1290328797f0c3ba50a7f75f216858a05dc",
+    "builder": ".github/workflows/jlc-harness-binary.yml",
+    "recipe": {
+      "go": "1.25.0",
+      "env": "CGO_ENABLED=0 GOOS=linux GOARCH=amd64",
+      "command": "go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' .",
+      "workdir": "jlc"
+    }
+  },
+  "requiredCapabilities": [
+    "live runner-once",
+    "flow validate",
+    "flow run --from",
+    "flow status",
+    "eda bootstrap --host auto",
+    "project import-external",
+    "activate pcb",
+    "pcb drc",
+    "bom export --verify",
+    "pcb export cpl",
+    "pcb export gerber",
+    "project export",
+    "pcb epro2-repair-kicad-import",
+    "pcb export 3d",
+    "project switch",
+    "pcb sync-from-sch --audit-source",
+    "pcb drc apply-invariants"
+  ],
+  "primaryEntryPoint": "jlc flow run --board JLC/rev-a --flow migrate",
+  "validationEntryPoint": "jlc flow validate --board JLC/rev-a --flow migrate",
+  "recoveryEntryPoint": "jlc flow run --board JLC/rev-a --flow migrate --from <stage-id>",
+  "liveExecutorEntryPoint": "jlc live runner-once --repo lcolok/jlc-eda-research --label jlceda-live",
+  "flowSpec": "JLC/rev-a/flows/migrate.yaml",
+  "fallback": "JLC/jlceda-scripts/*.js",
+  "intent": "Pin the shared Go Flow Harness plus one-shot outbound Mac execution transport used for the SPINC Golden Rev A live JLCEDA migration and evidence pipeline; SPINC carries declarative flow data, not shell orchestration. Source CI consumes the exact reproducible linux/amd64 binary of `commit` by SHA-256 from this repository's release; the private harness source and any cross-repository credential stay out of this public repository."
+}

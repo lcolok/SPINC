@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "qualification": "firmware-build-only-not-flashed-or-physical-golden",
+  "source": {
+    "repository": "https://github.com/lcolok/SPINC.git",
+    "commit": "db8b48f3488f4cfff0af913c96e79570a5bce809",
+    "project": "Platformio",
+    "environment": "pico"
+  },
+  "build": {
+    "date": "2026-09-22",
+    "platformio": "6.1.19",
+    "command": "/tmp/spinc-pio-native-619/bin/pio run -d Platformio -e pico",
+    "cleanCommand": "/tmp/spinc-pio-native-619/bin/pio run -d Platformio -e pico -t clean",
+    "cleanRebuildResult": "success",
+    "cleanRebuildSeconds": 9.14,
+    "platform": "Raspberry Pi RP2040 1.20.0+sha.5d4561a",
+    "board": "Raspberry Pi Pico",
+    "frameworkArduinoPico": "1.60100.0+sha.fd65f6d4",
+    "ram": {
+      "usedBytes": 91700,
+      "totalBytes": 262144,
+      "percent": 35.0
+    },
+    "flash": {
+      "usedBytes": 275228,
+      "maxSketchBytes": 2093056,
+      "percent": 13.1
+    }
+  },
+  "artifacts": [
+    {
+      "name": "firmware.uf2",
+      "path": "Platformio/.pio/build/pico/firmware.uf2",
+      "bytes": 574976,
+      "sha256": "2e3cd452b14fc80034ad638331d240aea4f7bdef5a4657645575482b30afd2f2",
+      "format": "UF2",
+      "family": "Raspberry Pi RP2040",
+      "blocks": 1123,
+      "primary": true
+    },
+    {
+      "name": "firmware.bin",
+      "path": "Platformio/.pio/build/pico/firmware.bin",
+      "bytes": 287264,
+      "sha256": "7eb643b3abd75cf8d3cc34089473b7946fb0157d0dddbdc50027ac3000b8a45f"
+    },
+    {
+      "name": "firmware.elf",
+      "path": "Platformio/.pio/build/pico/firmware.elf",
+      "bytes": 1097716,
+      "sha256": "212a41218bceebbbfaecf18d03df4e0e09a07f47e40217cd3d98c0889b9f9daf",
+      "format": "ELF 32-bit ARM EABI5"
+    }
+  ],
+  "repeatability": {
+    "incrementalAndCleanRebuildHashesEqual": true
+  },
+  "notEvaluated": [
+    "device-flash",
+    "boot",
+    "display",
+    "charger",
+    "mechanics",
+    "physical-golden"
+  ],
+  "environmentNote": "The machine's canonical pio entrypoints are AID remote shims. A disposable /tmp venv pinned to PlatformIO 6.1.19 was used to execute native PlatformIO without replacing or installing a system runtime."
+}

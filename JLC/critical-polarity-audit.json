@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "intent": "Freeze the upstream SPINC battery-polarity correction H-bridge and RP2040 gate-control mapping for golden JLC Rev A.",
+  "bridge": {
+    "reference": "Q2",
+    "mpn": "DMHC3025LSD",
+    "lcsc": "C156387",
+    "package": "SO-8_3.9x4.9mm_P1.27mm",
+    "description": "30 V complementary enhancement-mode MOSFET H-bridge",
+    "pads": [
+      {"pin": 1, "function": "N1G",       "net": "HBR_AL",                     "role": "A-side low-switch gate"},
+      {"pin": 2, "function": "P1D/N1D",   "net": "BAT_A",                      "role": "battery terminal A bridge midpoint"},
+      {"pin": 3, "function": "N1S/N2S",   "net": "Net-(Q2-N1S{slash}N2S)",    "role": "shared low rail to charge-current sense"},
+      {"pin": 4, "function": "N2G",       "net": "HBR_BL",                     "role": "B-side low-switch gate"},
+      {"pin": 5, "function": "P2G",       "net": "Net-(Q2-P2G)",               "role": "B-side high-switch gate"},
+      {"pin": 6, "function": "P2D/N2D",   "net": "BAT_B",                      "role": "battery terminal B bridge midpoint"},
+      {"pin": 7, "function": "P1S/P2S",   "net": "Net-(D4-K)",                 "role": "shared high rail / DS2712 VP1 sense rail"},
+      {"pin": 8, "function": "P1G",       "net": "Net-(Q1-D)",                 "role": "A-side high-switch gate"}
+    ]
+  },
+  "high_side_gate_drivers": [
+    {
+      "reference": "Q1",
+      "mpn": "DMG2301L",
+      "lcsc": "C102619",
+      "pads": [
+        {"pin": 1, "function": "G", "net": "HBR_AH"},
+        {"pin": 2, "function": "S", "net": "+3.3V"},
+        {"pin": 3, "function": "D", "net": "Net-(Q1-D)"}
+      ],
+      "pull_down": {"reference": "R18", "value": "4k7", "lcsc": "C99782", "pad_1_net": "-3V3", "pad_2_net": "Net-(Q1-D)"}
+    },
+    {
+      "reference": "Q3",
+      "mpn": "DMG2301L",
+      "lcsc": "C102619",
+      "pads": [
+        {"pin": 1, "function": "G", "net": "HBR_BH"},
+        {"pin": 2, "function": "S", "net": "+3.3V"},
+        {"pin": 3, "function": "D", "net": "Net-(Q2-P2G)"}
+      ],
+      "pull_down": {"reference": "R23", "value": "4k7", "lcsc": "C99782", "pad_1_net": "-3V3", "pad_2_net": "Net-(Q2-P2G)"}
+    }
+  ],
+  "rp2040_control": {
+    "reference": "U5",
+    "mpn": "RP2040",
+    "lcsc": "C2040",
+    "pins": [
+      {"pad": 12, "function": "GPIO9",  "net": "HBR_AH", "role": "A-side high control"},
+      {"pad": 13, "function": "GPIO10", "net": "HBR_AL", "role": "A-side low control"},
+      {"pad": 15, "function": "GPIO12", "net": "HBR_BL", "role": "B-side low control"},
+      {"pad": 16, "function": "GPIO13", "net": "HBR_BH", "role": "B-side high control"}
+    ],
+    "reserved_gap": {"pad": 14, "function": "GPIO11", "note": "GPIO11 is not one of the four H-bridge controls; do not renumber controls during JLC library remapping."}
+  },
+  "safety_invariants": [
+    "BAT_A must remain Q2 pin 2 bridge midpoint.",
+    "BAT_B must remain Q2 pin 6 bridge midpoint.",
+    "Q2 pin 3 shared N-source rail must remain connected to the R34/R35 current-sense node.",
+    "Q2 pin 7 shared P-source rail must remain Net-(D4-K), also sensed by DS2712 VP1.",
+    "High-side gate drive A must remain HBR_AH -> Q1 -> Q2.P1G with R18 pulling the P1G node toward -3V3.",
+    "High-side gate drive B must remain HBR_BH -> Q3 -> Q2.P2G with R23 pulling the P2G node toward -3V3.",
+    "Low-side controls HBR_AL/HBR_BL remain direct RP2040-to-Q2 N-gate nets.",
+    "Firmware GPIO mapping is part of the Rev A hardware contract and must not be reordered."
+  ]
+}

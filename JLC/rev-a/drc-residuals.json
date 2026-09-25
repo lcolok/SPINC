@@ -1,0 +1,6 @@
+{
+ "schema": 1,
+ "intent": "Exact JLCEDA DRC residuals for SPINC Golden Rev A. The gate passes only when the live DRC violation multiset equals this list; any extra, missing or changed item fails.",
+ "measured": "2026-09-25: zero. The two items reviewed before (FID2 outline to H1 pad, schematic/PCB netlist difference) were removed at their causes: the design's own Other Spacing rule (design-invariants.yaml drc_other_clearance, KiCad pth/npth_inside_courtyard = ignore) and the KiCad import semantics repair (schematic in_bom/on_board flags, board_only logos as board graphics) plus the audited schematic-to-PCB sync (one-to-one net renames, values equal to the KiCad source). The superseded list is kept in JLC/fixtures/drc-residuals-rev-a-411f5895.json.",
+ "residuals": []
+}

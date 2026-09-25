@@ -1,0 +1,39 @@
+# SPINC Golden Rev A — JLCEDA DRC rule invariants (machine-applied by
+# `jlc pcb drc apply-invariants --board JLC/rev-a`).
+#
+# Source of truth: the frozen KiCad design, not JLCEDA defaults.
+#   PCB/SPINC AA Charger/SPINC AA Charger.kicad_pro  board.design_settings.rules
+#     min_clearance 0.2 mm, min_via_diameter 0.4 mm, min_through_hole_diameter 0.25 mm
+#   PCB/SPINC AA Charger/SPINC AA Charger.kicad_pcb  3 zones (GND F/In1/In2/B,
+#     5V In2, +3.3V In2), each (connect_pads (clearance 0.25)); 136 vias 0.7/0.35 mm
+#
+# Measured on 2026-09-24 (run d9aa4b8b, project SPINC-JLC-Rev-A 6a4a0bc7...):
+# JLCEDA's default copperThickness1oz matrix requires >= 10 mil (0.254 mm) and
+# reported 3473 pour clearances at 9.5-10 mil, i.e. the designer's 0.25 mm.
+# The pour row is therefore set to exactly the design's zone clearance. No
+# other cell is relaxed. Imported pour fills that overlapped other nets (2973
+# zero-distance hits) are not a rule question; the flow re-pours natively
+# after these rules are active.
+#
+# Via Size (inner diameter) is not part of this matrix; the flow sets its
+# lower bound with `jlc pcb drc set-via-hole-min --value-mm 0.3`, below the
+# design's 0.35 mm drill and within JLCPCB's standard multilayer process.
+drc_clearance_overrides:
+  - {table: copperThickness1oz, row: "Copper/Plane Zone", col: "Track", value_mm: 0.25}
+  - {table: copperThickness1oz, row: "Copper/Plane Zone", col: "SMD Pad", value_mm: 0.25}
+  - {table: copperThickness1oz, row: "Copper/Plane Zone", col: "TH Pad", value_mm: 0.25}
+  - {table: copperThickness1oz, row: "Copper/Plane Zone", col: "Via", value_mm: 0.25}
+  - {table: copperThickness1oz, row: "Copper/Plane Zone", col: "Copper/Plane Zone", value_mm: 0.25}
+  - {table: copperThickness1oz, row: "Hole", col: "Copper/Plane Zone", value_mm: 0.25}
+
+# Other Spacing (JLCEDA otherClearance). JLCEDA's default requires a component
+# outline 10 mil (0.254 mm) from any pad and measures the component by its
+# bounding box. The frozen KiCad design has no such rule: kicad_pro
+# rule_severities pth_inside_courtyard = ignore and npth_inside_courtyard =
+# ignore, and KiCad never checks courtyard-to-SMD-pad; only courtyards_overlap
+# (component to component) is an error. Measured 2026-09-25: FID2's
+# bounding box sits 1.3 mil from the H1 pad while its courtyard circle is
+# 0.293 mm away. The rule is therefore the design's: device-to-pad 0.
+# Component-to-component and hole-to-hole keep JLCEDA's values.
+drc_other_clearance:
+  device_to_pad_mm: 0

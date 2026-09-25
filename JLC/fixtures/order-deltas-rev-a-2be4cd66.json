@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "intent": "Exact, reviewed differences between the JLCEDA-exported BOM/CPL of the imported SPINC-JLC-Rev-A project and the frozen upstream JLCPCB production files. The order-package gate passes only if the measured differences equal this list; anything extra, missing or changed fails.",
+  "measured": "run 2be4cd66, project SPINC-JLC-Rev-A 28afaec96a43428588c51e6c35a3d377, 2026-09-25",
+  "orderFiles": {
+    "bom": "PCB/SPINC AA Charger/production/bom.csv",
+    "cpl": "PCB/SPINC AA Charger/production/positions.csv",
+    "reason": "JLCEDA's KiCad importer carries no LCSC part numbers into the project (all 48 exported BOM rows have empty Manufacturer/Supplier Part), and its CPL uses raw KiCad footprint origins and orientations. The frozen upstream bom.csv (44 unique LCSC parts, 91 populated designators, identical to JLC/jlc-bindings.json) and positions.csv are the designer's JLCPCB assembly files and are ordered byte-identical."
+  },
+  "jlcOnlyPlacements": {
+    "designators": [
+      "H1",
+      "H2",
+      "REF**",
+      "TP1"
+    ],
+    "reason": "Mounting holes H1/H2, an unpopulated test pad TP1 and two board-only logos exported under KiCad's placeholder reference REF** (OSHW-Symbol_6.7x6mm_SilkScreen and KiCad-Logo2_5mm_SilkScreen); none is assembled or present in the upstream CPL.",
+    "placeholderRows": 2
+  },
+  "jlcBomNotInOrderBom": {
+    "designators": [
+      "FID1",
+      "FID2",
+      "FID3",
+      "FID4",
+      "H1",
+      "H2",
+      "R1",
+      "TH3",
+      "TP1"
+    ],
+    "reason": "Fiducials, mounting holes and test pad are not parts; R1 is (on_board no)(dnp yes) and TH3 is DNP in the frozen design (JLC/verify_jlc_export.py DNP_REFS)."
+  },
+  "valueAliases": {
+    "U8": {
+      "order": "DS2712E+",
+      "jlc": "DS2712",
+      "reason": "Frozen schematic symbol omoteLib:DS2712 has Value 'DS2712'; the upstream production BOM names the orderable TSSOP-16 part 'DS2712E+' with LCSC C7455651, identical to JLC/jlc-bindings.json. The difference is inside the frozen design, not an import change."
+    }
+  },
+  "positionDeltasMm": {
+    "J1": [
+      0.0,
+      -1.498
+    ],
+    "J2": [
+      0.015,
+      0.0
+    ],
+    "J3": [
+      0.0,
+      0.45
+    ],
+    "J4": [
+      -0.425,
+      0.0
+    ],
+    "J5": [
+      0.425,
+      0.0
+    ]
+  },
+  "rotationPairs": {
+    "D3": [
+      270.0,
+      90.0
+    ],
+    "FID2": [
+      0.0,
+      180.0
+    ],
+    "FID3": [
+      0.0,
+      180.0
+    ],
+    "Q1": [
+      0.0,
+      180.0
+    ],
+    "Q3": [
+      0.0,
+      180.0
+    ],
+    "Q4": [
+      90.0,
+      270.0
+    ],
+    "Q5": [
+      0.0,
+      180.0
+    ],
+    "U4": [
+      180.0,
+      0.0
+    ],
+    "U5": [
+      90.0,
+      0.0
+    ],
+    "U8": [
+      270.0,
+      0.0
+    ]
+  },
+  "deltaReason": "Inference, to be confirmed in the JLCPCB assembly placement preview before payment: upstream positions.csv applies JLCPCB part-origin offsets (connector body centres) and orientation corrections (SOT-23, TSOT-23, SOT-23-5, QFN-56, TSSOP-16, bottom fiducials) that JLCEDA does not apply to KiCad-imported footprints. rotationPairs are [upstream, jlcExport] in degrees."
+}
